@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NutriFlow</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="theme-color" content="#1B7F5C">
+<style>
+:root{--bg:#F4F7F5;--card:#fff;--ink:#14201B;--mut:#5C6B64;--line:#DCE5E0;--pri:#1B7F5C;--onpri:#fff;--acc:#C77A0A;--bad:#B3261E;--ok:#1B7F5C}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0E1512;--card:#17211C;--ink:#E8F0EC;--mut:#93A59C;--line:#26342D;--pri:#4CC38F;--onpri:#06150E;--acc:#F0B34F;--bad:#FF8A80;--ok:#4CC38F}}
+:root[data-theme=dark]{--bg:#0E1512;--card:#17211C;--ink:#E8F0EC;--mut:#93A59C;--line:#26342D;--pri:#4CC38F;--onpri:#06150E;--acc:#F0B34F;--bad:#FF8A80;--ok:#4CC38F}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px)}
+header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--line)}
+header h1{font-size:20px;margin:0;letter-spacing:-.02em}
+header h1 span{color:var(--pri)}
+main{flex:1;overflow-y:auto;padding:16px;max-width:720px;width:100%;margin:0 auto}
+nav{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);background:var(--card);padding-bottom:env(safe-area-inset-bottom,0px)}
+nav button{background:none;border:0;color:var(--mut);padding:10px 4px;font:inherit;font-size:13px;min-height:52px;cursor:pointer}
+nav button[aria-current=true]{color:var(--pri);font-weight:700;box-shadow:inset 0 3px 0 var(--pri)}
+h2{font-size:18px;margin:0 0 4px}
+p.h{color:var(--mut);margin:0 0 12px;font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+textarea,input,select{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px}
+textarea{min-height:170px;resize:vertical}
+button.p,button.s{font:inherit;border-radius:10px;padding:11px 16px;min-height:44px;cursor:pointer;border:1px solid var(--pri)}
+button.p{background:var(--pri);color:var(--onpri);font-weight:700}
+button.s{background:none;color:var(--pri)}
+button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.row>*{flex:1}
+.it{display:grid;grid-template-columns:auto 1fr 84px;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+.it:first-child{border-top:0}
+.it input[type=checkbox]{width:22px;height:22px}
+.it small{display:block;color:var(--mut)}
+.seg{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.seg button{padding:12px 0;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:10px;font:inherit;min-height:44px}
+.seg button[aria-pressed=true]{background:var(--pri);color:var(--onpri);border-color:var(--pri);font-weight:700}
+.big{font-size:28px;font-weight:800;letter-spacing:-.02em}
+.kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+.kpi small{color:var(--mut);display:block;font-size:12px}
+.kpi b{font-size:17px}
+.sec{color:var(--pri);font-weight:700;margin:16px 0 6px}
+.ln{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-top:1px solid var(--line)}
+.ln small{color:var(--mut);display:block}
+.ln div:last-child{text-align:right;white-space:nowrap}
+.warn{color:var(--bad);font-weight:700}.good{color:var(--ok);font-weight:700}
+.mh{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.chips{display:flex;flex-wrap:wrap;gap:6px;padding:8px 0;border-top:1px solid var(--line)}.chip{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:999px;padding:6px 12px;font:inherit;font-size:13px;min-height:36px;cursor:pointer}.chip[aria-pressed=true]{border-color:var(--pri);background:color-mix(in srgb,var(--pri) 14%,var(--bg))}.chip[aria-pressed=false]{opacity:.5;text-decoration:line-through}.oh{display:block;font-weight:700;margin-top:10px}.pi{width:84px;padding:4px 6px;margin-top:4px;text-align:right}details summary{cursor:pointer;color:var(--pri);margin:8px 0;min-height:32px}
+.empty{text-align:center;color:var(--mut);padding:32px 8px}
+.net{font-size:12px;color:var(--mut)}
+</style>
+</head>
+<body>
+<header><h1>Nutri<span>Flow</span></h1><div class="row" style="flex:0"><span class="net" id="net"></span><button class="s" id="th" aria-label="Alternar tema" style="min-width:44px;padding:6px 10px"></button></div></header>
+<main id="m"></main>
+<nav id="nav"></nav>
+<script>
+const $=s=>document.querySelector(s);
+const DEF=`# Café da manhã | 06:00
+1 un banana ou 150g mamão papaia
+10g farelo de aveia
+2 fatias pão de forma integral ou 1 un pão francês
+40g queijo minas frescal ou 30g mussarela
+3 un ovo mexido
+5g açúcar
+# Lanche da manhã | 10:00
+## Opção 1
+170g iogurte (cenoura, mel e laranja)
+20g granola
+15g mel
+## Opção 2
+30g whey protein concentrado
+30g leite em pó
+90g banana ou maçã ou pera ou manga
+# Almoço | 12:00
+90g arroz integral cozido ou arroz branco cozido ou aipim cozido ou inhame cozido ou 190g batata inglesa cozida ou 230g abóbora cabotiã cozida ou 80g macarrão cozido
+100g feijão cozido
+150g filé de frango grelhado ou 130g carne patinho moída ou 3 un ovo cozido ou 200g peixe grelhado
+110g cenoura ou beterraba ou vagem ou brócolis ou couve-flor ou chuchu ou abobrinha ou tomate ou pepino
+1 un tangerina ou 1 un laranja ou 2 un limão ou 1 un kiwi ou 100g abacaxi
+# Lanche da tarde | 15:00
+## Opção 1
+170g iogurte (cenoura, mel e laranja)
+20g granola
+15g mel
+## Opção 2
+30g whey protein concentrado
+30g leite em pó
+90g banana ou maçã ou pera ou manga
+## Opção 3
+60g pão francês ou 2 fatias pão de forma
+30g mussarela ou 50g queijo minas
+30g whey protein concentrado
+# Jantar | 19:00
+90g arroz integral cozido ou arroz branco cozido ou aipim cozido ou inhame cozido ou 190g batata inglesa cozida ou 230g abóbora cabotiã cozida ou 80g macarrão cozido
+70g feijão cozido
+100g filé de frango grelhado ou 100g carne patinho moída ou 2 un ovo cozido ou 130g peixe grelhado
+110g cenoura ou beterraba ou vagem ou brócolis ou couve-flor ou chuchu ou abobrinha ou tomate ou pepino`;
+const CATS={prot:{f:.75,p:35,s:500},arroz:{f:2.5,p:6,s:1000},feijao:{f:2.8,p:9,s:1000},tub:{f:1,p:5,s:500},mac:{f:2.2,p:8,s:500},ovo:{f:1,p:1,s:12},supl:{f:1,p:100,s:500},out:{f:1,p:12,s:250}};
+const KW=[['ovo',/\bovos?\b/i],['supl',/whey|leite em p/i],['arroz',/arroz/i],['feijao',/feij[aã]o|lentilha/i],['mac',/macarr|massa|espaguete/i],['tub',/batata|ab[oó]bora|aipim|mandioca|inhame|cabotia/i],['prot',/frango|carne|patinho|peixe|til[aá]pia|bife|merluza|salm[aã]o|ac[eé]m/i]];
+const DEFP=[[/iogurte/i,14],[/granola/i,25],[/\bmel\b/i,35],[/queijo|mussarela/i,50],[/p[aã]o/i,16],[/aveia|farelo/i,12],[/a[cç][uú]car/i,5],[/banana|ma[cç][aã]|pera|manga|mam[aã]o|abacaxi/i,8]];
+const cat=n=>(KW.find(k=>k[1].test(n))||['out'])[0];
+let S;try{S=JSON.parse(localStorage.getItem('nf2')||'null')}catch(e){}
+S=Object.assign({text:DEF,days:14,mode:'var',budget:0,tab:0,theme:'',off:{},moff:{},prices:{}},S||{});
+let tab=S.tab,P;
+const save=()=>{S.tab=tab;try{localStorage.setItem('nf2',JSON.stringify(S))}catch(e){}};
+const fmt=n=>'R$ '+n.toFixed(2).replace('.',',');
+const kg=g=>g>=1000?(g/1000).toFixed(2).replace('.',',')+' kg':Math.round(g)+' g';
+const num=s=>{s=s.replace(',','.');if(s.includes('/')){const[a,b]=s.split('/');return a/b}return parseFloat(s)};
+function parseAlt(p,prev){
+  const m=p.trim().match(/^(\d+\/\d+|\d+(?:[.,]\d+)?)\s*(kg|g|ml|un|und|unid\w*|fatias?)?\s+(.*)$/i);
+  if(m){let q=num(m[1]),u=(m[2]||'un').toLowerCase();if(u==='kg'){q*=1000;u='g'}if(u==='ml')u='g';const g=u==='g'?q:0;return{name:m[3].trim(),g,n:g?0:q,cat:cat(m[3])}}
+  return prev?{name:p.trim(),g:prev.g,n:prev.n,cat:cat(p)}:null;
+}
+function parsePlan(t){
+  const ms=[];let m,o;
+  for(const raw of t.split('\n')){
+    const l=raw.trim();if(!l)continue;
+    if(l[0]==='#'&&l[1]!=='#'){const[n,h]=l.slice(1).split('|');m={name:n.trim(),time:(h||'').trim(),opts:[]};ms.push(m);o=null;continue}
+    if(l.startsWith('##')&&m){o={name:l.slice(2).trim(),comps:[]};m.opts.push(o);continue}
+    if(!m||!/\d/.test(l))continue;
+    if(!o){o={name:'',comps:[]};m.opts.push(o)}
+    let prev=null;const alts=[];
+    for(const p of l.split(/\s+ou\s+/i)){const a=parseAlt(p,prev);if(a){alts.push(a);prev=a}}
+    if(alts.length)o.comps.push({alts});
+  }
+  return ms;
+}
+const price=it=>S.prices[it.name]??(it.mode==='n'?(it.cat==='ovo'?1:/p[aã]o/i.test(it.name)?.6:1.5):(DEFP.find(d=>d[0].test(it.name))||[0,CATS[it.cat].p])[1]);
+const sector=it=>it.cat==='supl'?'Suplementos':it.cat==='prot'?'Açougue':it.cat==='ovo'||/queijo|mussarela|iogurte|leite/i.test(it.name)?'Laticínios e ovos':/p[aã]o/i.test(it.name)?'Padaria':it.cat==='tub'||/banana|ma[cç][aã]|pera|manga|mam[aã]o|abacaxi|tangerina|laranja|lim[aã]o|kiwi|cenoura|beterraba|vagem|br[oó]colis|couve|chuchu|abobrinha|tomate|pepino/i.test(it.name)?'Hortifrúti':'Mercearia';
+const raw=a=>a.g?a.g/CATS[a.cat].f:a.n;
+const cst=a=>price({name:a.name,cat:a.cat,mode:a.g?'g':'n'})*(a.g?raw(a)/1000:a.n);
+function plan(){
+  const days=S.days,items={},out=[];let N=0;
+  P.forEach((m,mi)=>{
+    if(S.moff[mi])return;
+    const isM=/almo|jantar/i.test(m.name),os=m.opts.map((o,oi)=>[o,oi]).filter(x=>!S.off[mi+'.'+x[1]]);
+    if(!os.length)return;if(isM)N+=days;
+    const cm={};
+    for(let d=0;d<days;d++){
+      const[o,oi]=os[d%os.length],nm=[];
+      o.comps.forEach((c,ci)=>{
+        const al=c.alts.filter((a,ai)=>!S.off[`${mi}.${oi}.${ci}.${ai}`]);if(!al.length)return;
+        const a=S.mode==='eco'?al.reduce((x,y)=>cst(y)<cst(x)?y:x):al[Math.min(al.length-1,Math.floor(d/Math.ceil(days/al.length)))];
+        nm.push(a.name);
+        const k=a.cat==='ovo'?'ovo':a.name.toLowerCase()+(a.g?'g':'n'),it=items[k]=items[k]||{name:a.cat==='ovo'?'Ovo de galinha':a.name,cat:a.cat,mode:a.g?'g':'n',q:0,c:0,m:0},r=raw(a);
+        it.q+=r;it.c+=a.g||a.n;if(isM&&a.cat!=='supl')it.m+=r;
+      });
+      const key=(o.name?o.name+': ':'')+nm.join(' + ');cm[key]=(cm[key]||0)+1;
+    }
+    out.push({m,isM,list:Object.entries(cm)});
+  });
+  const lines=Object.values(items).map(it=>{
+    const st=it.mode==='n'?(it.cat==='ovo'?12:1):CATS[it.cat].s,buy=Math.ceil(it.q/st-1e-9)*st,p=price(it);
+    return{...it,buy,p,cost:it.mode==='n'?buy*p:buy/1000*p,sec:sector(it)};
+  });
+  const total=lines.reduce((a,l)=>a+l.cost,0),marm=lines.reduce((a,l)=>a+l.cost*l.m/l.q,0);
+  return{N,out,lines,total,marm};
+}
+const fq=(l,v)=>l.mode==='n'?Math.ceil(v-1e-9)+' un':kg(v);
+const esc=s=>s.replace(/"/g,'&quot;');
+function view(){
+  $('#nav').innerHTML=['Plano','Ciclo','Marmitas','Compras'].map((t,i)=>`<button aria-current="${tab===i}" onclick="go(${i})">${t}</button>`).join('');
+  const d=document.documentElement;
+  $('#th').textContent=d.dataset.theme==='dark'||(!d.dataset.theme&&matchMedia('(prefers-color-scheme:dark)').matches)?'☀':'☾';
+  const m=$('#m');
+  if(tab===0){
+    m.innerHTML=`<h2>Plano alimentar</h2><p class="h">Toque nas opções que você aceita comer; as riscadas ficam fora do ciclo. Só entra o que está no plano do nutricionista.</p>
+    ${P.map((x,mi)=>`<div class="card"><div class="mh"><label><input type="checkbox" ${S.moff[mi]?'':'checked'} onchange="tg('moff','${mi}')"> <b>${x.name}</b></label><span class="net">${x.time}</span></div>
+    ${x.opts.map((o,oi)=>`${o.name?`<label class="oh"><input type="checkbox" ${S.off[mi+'.'+oi]?'':'checked'} onchange="tg('off','${mi}.${oi}')"> ${o.name}</label>`:''}
+    ${o.comps.map((c,ci)=>`<div class="chips">${c.alts.map((a,ai)=>{const k=`${mi}.${oi}.${ci}.${ai}`;return `<button class="chip" aria-pressed="${!S.off[k]}" onclick="tg('off','${k}')">${a.name} · ${a.g?a.g+' g':a.n+' un'}</button>`}).join('')}</div>`).join('')}`).join('')}</div>`).join('')}
+    <details><summary>Editar plano em texto</summary><textarea id="tx" aria-label="Plano em texto">${S.text.replace(/</g,'&lt;')}</textarea>
+    <p class="net"># Refeição | hora · ## Opção · um componente por linha · alternativas separadas por “ou” (sem quantidade, repete a anterior).</p>
+    <div class="row"><button class="p" onclick="doParse()">Ler plano</button><button class="s" onclick="doParse(DEF)">Restaurar exemplo</button></div></details>`;
+  }
+  if(tab===1){
+    m.innerHTML=`<h2>Ciclo e orçamento</h2><p class="h">Quantos dias de marmitas você vai cozinhar.</p>
+    <div class="seg" role="group" aria-label="Dias">${[7,14,21,28].map(n=>`<button aria-pressed="${S.days===n}" onclick="S.days=${n};save();view()">${n} dias</button>`).join('')}</div>
+    <div class="card" style="margin-top:12px"><label>Orçamento do ciclo (R$, opcional)<input type="number" inputmode="decimal" value="${S.budget||''}" onchange="S.budget=+this.value;save()"></label></div>
+    <div class="seg" style="grid-template-columns:1fr 1fr" role="group" aria-label="Preferência"><button aria-pressed="${S.mode==='eco'}" onclick="S.mode='eco';save();view()">Economizar</button><button aria-pressed="${S.mode==='var'}" onclick="S.mode='var';save();view()">Variar mais</button></div>`;
+  }
+  if(tab===2){
+    const p=plan();
+    m.innerHTML=!p.out.length?'<div class="empty">Marque refeições na aba Plano.</div>':`<h2>Cardápio do ciclo</h2><p class="h">${p.N} marmitas (almoço + jantar) em ${S.days} dias</p>${p.out.map(o=>`<div class="sec">${o.m.name} ${o.m.time}${o.isM?' · marmitas':''}</div>${o.list.map(([k,n])=>`<div class="card"><span class="big">${n}×</span> ${k}</div>`).join('')}`).join('')}`;
+  }
+  if(tab===3){
+    const p=plan(),secs={};p.lines.forEach(l=>(secs[l.sec]=secs[l.sec]||[]).push(l));
+    const bud=S.budget?(p.total<=S.budget?'<span class="good">dentro do orçamento</span>':`<span class="warn">${fmt(p.total-S.budget)} acima do orçamento</span>`):'';
+    m.innerHTML=!p.lines.length?'<div class="empty">Marque refeições na aba Plano.</div>':`<h2>Lista de compras</h2><div class="card kpi"><div><small>Ciclo</small><b>${fmt(p.total)}</b></div><div><small>Por dia</small><b>${fmt(p.total/S.days)}</b></div><div><small>Por marmita</small><b>${fmt(p.N?p.marm/p.N:0)}</b></div></div><p class="h">${bud}</p>
+    ${Object.keys(secs).sort().map(s=>`<div class="sec">${s}</div>${secs[s].map(l=>`<div class="ln"><div>${l.name}<small>${l.cat==='out'||l.cat==='supl'||l.cat==='ovo'?'Necessário '+fq(l,l.q):'Prescrito '+kg(l.c)+' → cru '+kg(l.q)}</small></div><div><b>${fq(l,l.buy)}</b><small>${fmt(l.cost)}</small><input class="pi" type="number" inputmode="decimal" step="0.1" min="0" value="${+l.p.toFixed(2)}" data-n="${esc(l.name)}" onchange="pr(this.dataset.n,this.value)" aria-label="Preço de ${esc(l.name)} (${l.mode==='n'?'por unidade':'por kg'})"></div></div>`).join('')}`).join('')}<p class="net">Preços em R$/kg (ou R$/un nos itens em unidade): valores iniciais são estimativas, edite à direita.</p>`;
+  }
+}
+function go(i){tab=i;save();view();$('#m').scrollTop=0}
+function doParse(t){S.text=t||$('#tx').value;S.off={};S.moff={};P=parsePlan(S.text);save();view()}
+function tg(o,k){S[o][k]=!S[o][k];save();view()}
+function pr(n,v){S.prices[n]=+v||0;save();view()}
+$('#th').onclick=()=>{const d=document.documentElement,dark=d.dataset.theme==='dark'||(!d.dataset.theme&&matchMedia('(prefers-color-scheme:dark)').matches);d.dataset.theme=S.theme=dark?'light':'dark';save();view()};
+if(S.theme)document.documentElement.dataset.theme=S.theme;
+P=parsePlan(S.text);
+const net=()=>$('#net').textContent=navigator.onLine?'':'offline';
+addEventListener('online',net);addEventListener('offline',net);net();
+if('serviceWorker'in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js'));
+view();
+</script>
+</body>
+</html>
