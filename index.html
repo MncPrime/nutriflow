@@ -82,6 +82,51 @@ input[type=checkbox]{width:22px;height:22px;flex:none;padding:0}.mh label,.oh{di
 .plan-editor .row{margin-top:12px}
 .plan-editor-hint{margin:0 0 12px;color:var(--mut);font-size:14px}
 .capture-card{padding:14px}.capture-card h3{margin:0 0 4px;font-size:17px}.capture-card textarea{min-height:132px}.capture-actions{display:grid;grid-template-columns:1fr;gap:8px;margin-top:12px}.capture-actions button{width:100%}.capture-guide{margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}.capture-guide h4{margin:0 0 8px;font-size:15px}.capture-guide .row{gap:8px}.capture-preview{margin-top:12px;border-top:1px solid var(--line);padding-top:12px}.capture-preview h4{margin:0 0 8px;font-size:15px}.capture-preview ul,.capture-warnings{margin:8px 0;padding-left:20px}.capture-preview li,.capture-warnings li{margin:4px 0}.capture-warnings{color:var(--bad);font-size:13px}.capture-source{font-size:13px;color:var(--mut);margin:0 0 10px}.capture-preview-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.capture-preview-actions button{padding-inline:10px}
+.imp-opts{display:grid;gap:8px;margin:12px 0}
+.imp-opt{position:relative;display:grid;grid-template-columns:44px minmax(0,1fr);grid-template-rows:auto auto;align-items:center;column-gap:12px;row-gap:4px;width:100%;min-height:68px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--bg);color:var(--ink);font:inherit;text-align:left;cursor:pointer;transition:border-color .15s,background-color .15s,transform .15s}
+.imp-opt:hover:not(:disabled){border-color:var(--pri);background:color-mix(in srgb,var(--pri) 5%,var(--bg))}
+.imp-opt:active:not(:disabled){transform:scale(.99)}
+.imp-opt:focus-visible,.imp-opt:focus-within{outline:3px solid var(--acc);outline-offset:2px}
+.imp-primary{border-color:color-mix(in srgb,var(--pri) 45%,var(--line));background:color-mix(in srgb,var(--pri) 5%,var(--bg))}
+.imp-opt:disabled{opacity:.78;cursor:not-allowed}
+.imp-ico{grid-column:1;grid-row:1 / span 2;display:grid;place-items:center;width:44px;height:44px;border-radius:12px;background:color-mix(in srgb,var(--pri) 11%,var(--card));color:var(--pri)}
+.imp-ico svg{display:block;width:22px;height:22px;flex:none}
+.imp-txt{grid-column:2;grid-row:1;display:grid;gap:2px;min-width:0}
+.imp-txt b{font-size:14px;line-height:1.3}
+.imp-txt small{color:var(--mut);font-size:12px;line-height:1.4}
+.imp-tag,.imp-soon{grid-column:2;grid-row:2;justify-self:start;padding:2px 8px;border-radius:999px;background:color-mix(in srgb,var(--pri) 12%,var(--card));color:var(--pri);font-size:11px;font-style:normal;font-weight:700}
+.imp-soon{background:var(--card);color:var(--mut)}
+.imp-opt input[type=file]{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap;border:0}
+.capture-input{margin-bottom:12px}
+.capture-label{display:block;font-size:14px;font-weight:600;color:var(--mut);margin-bottom:8px}
+.upload-pdf{display:block;position:relative;cursor:pointer}
+.upload-pdf input[type=file]{display:none}
+.upload-pdf .upload-button{display:flex;align-items:center;justify-content:center;padding:14px;border:2px dashed var(--line);border-radius:10px;background:color-mix(in srgb,var(--pri) 5%,var(--bg));color:var(--pri);text-align:center;font-weight:600;font-size:15px;transition:background-color .15s,border-color .15s;min-height:54px}
+.upload-pdf:hover .upload-button{background:color-mix(in srgb,var(--pri) 10%,var(--bg));border-color:var(--pri)}
+.upload-pdf:active .upload-button{transform:scale(.98)}
+.capture-loading{display:flex;align-items:center;justify-content:center;gap:8px;padding:16px;color:var(--mut);font-size:14px}
+.food-suggestions{display:flex;flex-direction:column;gap:4px;margin-top:8px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--bg)}
+.suggestion-item{display:block;width:100%;padding:10px;text-align:left;border:0;background:transparent;color:var(--ink);cursor:pointer;font-size:14px;transition:background-color .15s;min-height:40px}
+.suggestion-item:hover{background:color-mix(in srgb,var(--pri) 10%,var(--bg));color:var(--pri)}
+.suggestion-item:active{background:color-mix(in srgb,var(--pri) 20%,var(--bg))}
+.manual-intro{margin:0 0 14px;color:var(--mut);font-size:14px}
+.manual-section{display:grid;gap:8px;margin:0 0 12px;padding:14px;border:1px solid var(--line);border-radius:14px;background:color-mix(in srgb,var(--pri) 3%,var(--card))}
+.manual-section h4{margin:0 0 2px;font-size:15px;letter-spacing:-.01em}
+.manual-section>label,.manual-quantity>label{font-size:13px;font-weight:650;color:var(--mut)}
+.manual-section input,.manual-section select{min-height:48px;border-radius:12px;background:var(--bg)}
+.manual-selected,.manual-help{margin:0;color:var(--mut);font-size:12px;line-height:1.45}
+.manual-selected b{color:var(--ink)}
+.manual-quantity{display:grid;gap:6px}
+.manual-quantity-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(104px,.55fr);gap:8px}
+.manual-category{margin-top:2px}
+.manual-category summary{margin:0;font-size:13px;font-weight:650}
+.manual-category .imp-cats{padding:8px 0 0;border:0}
+.manual-section .imp-cats .chip{background:var(--bg)}
+.imp-understood{margin:12px 0;padding:12px;border:1px solid color-mix(in srgb,var(--pri) 24%,var(--line));border-radius:12px;background:color-mix(in srgb,var(--pri) 6%,var(--card));font-size:13px}
+.imp-understood>b{display:block;margin-bottom:6px;color:var(--pri)}
+.imp-understood>div+div{margin-top:5px}
+.imp-understood i{padding:0 4px;color:var(--mut);font-style:normal}
+.capture-preview-actions .p:disabled{opacity:.5;cursor:not-allowed}
 .plan-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px}
 .plan-heading h2{font-size:22px;margin:0}
 .plan-count{flex:none;border:1px solid var(--line);border-radius:999px;padding:4px 9px;color:var(--mut);font-size:12px}
@@ -143,6 +188,11 @@ import {
   formatWhatsAppQuote,
 } from './src/domain/commercial.js';
 import { parsePlanText } from './src/domain/plan-parser.js';
+import { extractPdfLines, preloadPdfEngine } from './src/importer/document-extractor.js';
+import { createSession, buildDraft, refresh, updateAlt, removeAlt, updateMeal, removeMeal, previewQuick, addEntries, updateManualField, serializeDraft } from './src/importer/import-session.js';
+import { renderChooser, renderReview, renderManual, renderScheduleChooser } from './src/importer/review-view.js';
+import { searchFoods } from './src/importer/food-search.js';
+import { isLikelyPlan } from './src/importer/plan-detector.js';
 import {
   getAdminSession,
   loadAdminData,
@@ -214,10 +264,10 @@ const DEF=`# Café da manhã | 06:00
 110g cenoura ou beterraba ou vagem ou brócolis ou couve-flor ou chuchu ou abobrinha ou tomate ou pepino`;
 const KW=[['ovo',/\bovos?\b/i],['supl',/whey|leite em p/i],['arroz',/arroz/i],['feijao',/feij[aã]o|lentilha/i],['mac',/macarr|massa|espaguete/i],['tub',/batata|ab[oó]bora|aipim|mandioca|inhame|cabotia/i],['prot',/frango|carne|patinho|peixe|til[aá]pia|bife|merluza|salm[aã]o|ac[eé]m/i]];
 const cat=n=>(KW.find(k=>k[1].test(n))||['out'])[0];
-import { sanitizeFoodName } from './src/utils/food-matching.js';
+import { sanitizeFoodName, matchFoodName } from './src/utils/food-matching.js';
 let S;try{S=JSON.parse(localStorage.getItem('nf2')||'null')}catch(e){}
 S=Object.assign({text:DEF,days:14,mode:'var',budget:0,tab:0,theme:'',off:{},moff:{},prices:{},priceOverrides:{},customerName:''},S||{});
-let tab=Number.isInteger(S.tab)&&S.tab>=0&&S.tab<=4?S.tab:0,P,catalogSnapshot=null,adminSession=null,adminData=null,adminFoodEdit=null,newFoodDraft=null,adminAuthMode='login',adminAuthMessage='',successMessage='',successTimer=0,planError='',screenError='',isSyncing=false,quoteHistory=[],adminPending=[],lastQuoteLink='',liveQuote=null,liveQuoteKey='',quoteRequestInFlight='',quoteErrorKey='',offlineSnapshot=null,offlineSnapshotKey='',offlineLookupKey='',adminRequests=[],captureText=S.text,capturePreview=null,captureFormOpen=false;
+let tab=Number.isInteger(S.tab)&&S.tab>=0&&S.tab<=4?S.tab:0,P,catalogSnapshot=null,adminSession=null,adminData=null,adminFoodEdit=null,newFoodDraft=null,adminAuthMode='login',adminAuthMessage='',successMessage='',successTimer=0,planError='',screenError='',isSyncing=false,quoteHistory=[],adminPending=[],lastQuoteLink='',liveQuote=null,liveQuoteKey='',quoteRequestInFlight='',quoteErrorKey='',offlineSnapshot=null,offlineSnapshotKey='',offlineLookupKey='',adminRequests=[],captureText=S.text,imp=createSession(),foodSuggestions=[];
 const savingActions=new Set();
 S.tab=tab;
 function quoteKeyForState(state=S){return JSON.stringify({text:state.text,days:state.days,mode:state.mode,off:state.off,moff:state.moff})}
@@ -241,6 +291,9 @@ async function withSaving(button,message,action){
   finally{if(target){savingActions.delete(target);target.disabled=false;target.removeAttribute('aria-busy');target.classList.remove('is-saving');target.innerHTML=original}}
 }
 function successFeedback(){return successMessage?`<div class="feedback" role="status" aria-live="polite">${inlineIcon(checkCircleIcon)}<span>${esc(successMessage)}</span></div>`:''}
+function showSuccess(message){
+  screenError='';successMessage=message;clearTimeout(successTimer);view();successTimer=setTimeout(()=>{successMessage='';if(document.visibilityState==='visible')view()},4000);
+}
 const fmtMoney=(value,currency=catalogSnapshot?.config?.currency||'BRL')=>new Intl.NumberFormat('pt-BR',{style:'currency',currency}).format(value);
 const hasPrice=value=>value!==undefined&&value!==null&&value!==''&&Number.isFinite(Number(value));
 const inlineIcon=svg=>svg.replace('<svg ','<svg class="icon" ');
@@ -331,13 +384,8 @@ function view(){
   const m=$('#m');
   if(tab===0){
     const activeMeals=P.filter((_,mi)=>!S.moff[mi]).length;
-    const draftMeals=(capturePreview?.meals||P).map(meal=>meal.name);
-    const preview=capturePreview?`<section class="capture-preview" aria-live="polite"><h4>Prévia do plano</h4><p class="capture-source">${capturePreview.meals.length} refeição(ões) reconhecida(s). Revise antes de aplicar.</p>${capturePreview.meals.length?`<ul>${capturePreview.meals.map(meal=>`<li><b>${esc(meal.name)}</b>${meal.time?` · ${esc(meal.time)}`:''} — ${meal.opts.reduce((total,opt)=>total+opt.comps.length,0)} item(ns)</li>`).join('')}</ul>`:''}${capturePreview.warnings.length?`<ul class="capture-warnings">${capturePreview.warnings.map(warning=>`<li>${esc(warning)}</li>`).join('')}</ul>`:''}<div class="capture-preview-actions"><button class="s" type="button" onclick="discardCapturePreview()">Continuar editando</button><button class="p" type="button" onclick="applyCapturePreview()" ${capturePreview.meals.length?'':'disabled'}>Aplicar plano</button></div></section>`:'';
     m.innerHTML=`<div class="plan-heading"><h2>Plano alimentar</h2><span class="plan-count">${activeMeals} de ${P.length} refeições</span></div><p class="plan-description">Toque nos alimentos para incluir ou remover do ciclo. As opções riscadas ficam fora do planejamento.</p>
-    <section class="card capture-card"><h3>Adicionar ou importar plano</h3><p class="plan-editor-hint">Cole o plano como recebeu ou monte item por item. Nada é aplicado antes da sua confirmação.</p><textarea id="tx" aria-label="Plano em texto" placeholder="# Café da manhã | 07:00&#10;2 un ovo&#10;150 g mamão">${esc(captureText)}</textarea>
-    <div class="capture-actions"><button class="p" type="button" onclick="analyzeCapture()">Analisar plano</button><button class="s" type="button" onclick="toggleCaptureForm()">${captureFormOpen?'Fechar inclusão guiada':'Adicionar alimento guiado'}</button></div>
-    ${captureFormOpen?`<div class="capture-guide"><h4>Adicionar alimento</h4><div class="row"><label>Refeição<select id="capture-meal"><option value="new">Nova refeição</option>${draftMeals.map(name=>`<option value="${esc(name)}">${esc(name)}</option>`).join('')}</select></label><label>Nome da nova refeição<input id="capture-new-meal" placeholder="Ex.: Café da manhã"></label></div><label>Alimento<input id="capture-food" placeholder="Ex.: arroz integral cozido"></label><div class="row"><label>Quantidade<input id="capture-quantity" type="number" min="0.01" step="any" inputmode="decimal" placeholder="Ex.: 150"></label><label>Unidade<select id="capture-unit"><option value="g">gramas</option><option value="ml">mililitros</option><option value="un">unidades</option><option value="fatias">fatias</option></select></label></div><button class="s" type="button" onclick="appendCaptureFood()">Adicionar ao rascunho</button></div>`:''}
-    ${preview}<details class="plan-editor"><summary>Ajuda para texto colado</summary><p class="plan-editor-hint">Use # para uma refeição, ## para opções e “ou” entre alternativas. Entendemos g, gramas, kg, ml, litros, un, unidades e fatias. A extração de PDF será adicionada aqui no futuro; por enquanto, cole o texto extraído do documento.</p><button class="s" type="button" onclick="loadExampleCapture()">Usar exemplo</button></details></section>
+    <section class="card capture-card">${renderImportCard()}</section>
     <div class="plan-meals">${P.map((x,mi)=>`<section class="card plan-meal"><div class="mh plan-meal-head"><label class="plan-meal-toggle"><input type="checkbox" ${S.moff[mi]?'':'checked'} onchange="tg('moff','${mi}')"> <span class="plan-meal-name">${esc(x.name)}</span></label><span class="plan-time">${esc(x.time)}</span></div>
     ${x.opts.map((o,oi)=>`${o.name?`<label class="oh"><input type="checkbox" ${S.off[mi+'.'+oi]?'':'checked'} onchange="tg('off','${mi}.${oi}')"> ${esc(o.name)}</label>`:''}
     ${o.comps.map((c,ci)=>`<div class="chips">${c.alts.map((a,ai)=>{const k=`${mi}.${oi}.${ci}.${ai}`,amount=a.g?formatQuantity(a.g,'g'):a.ml?formatQuantity(a.ml,'ml'):formatQuantity(a.n,'un');return `<button class="chip" aria-pressed="${!S.off[k]}" onclick="tg('off','${k}')">${esc(a.name)} · ${amount}</button>`}).join('')}</div>`).join('')}`).join('')}</section>`).join('')}</div>`;
@@ -384,33 +432,102 @@ function view(){
   ensureOnlineQuote();
 }
 function go(i){tab=Math.min(4,Math.max(0,Number(i)||0));screenError='';save();view();$('#m').scrollTop=0}
-function doParse(t){
-  captureText=t??$('#tx')?.value??captureText;
-  analyzeCapture();
+const impOptions=()=>({isKnownFood:catalogSnapshot?.approved_foods?.length?name=>matchFoodName(name,catalogSnapshot.approved_foods.map(f=>({name:f.canonical_name}))).status==='matched':undefined});
+function renderImportCard(){
+  imp.text=captureText;
+  if(imp.mode==='pdf-schedule')return renderScheduleChooser(imp,esc);
+  if(imp.draft&&imp.mode!=='manual')return renderReview(imp,esc);
+  if(imp.mode==='manual')return (imp.draft?renderManual(imp,esc,imp.draft.meals,foodSuggestions):'')+(imp.draft?.meals.length?`<hr style="border:0;border-top:1px solid var(--line);margin:14px 0">${renderReview(imp,esc)}`:'');
+  return renderChooser(imp,esc);
 }
-function analyzeCapture(){
+function doParse(t){captureText=t??$('#tx')?.value??captureText;importInterpret()}
+function importInterpret(){
   captureText=$('#tx')?.value??captureText;
-  try{capturePreview=parsePlanText(captureText,cat);planError='';view()}
-  catch(error){capturePreview=null;planError=error instanceof Error?error.message:String(error);view()}
+  imp.error='';
+  if(!captureText.trim()){imp.error='Cole o texto do plano ou importe um PDF.';view();return}
+  const {draft,stats}=buildDraft(captureText,impOptions());
+  imp.draft=draft;imp.stats=stats;imp.mode='review';
+  if(!stats.foods){imp.draft=null;imp.mode='';imp.error='Não reconheci refeições ou alimentos. Confira o texto ou use “Montar manualmente”.'}
+  view();
 }
-function discardCapturePreview(){capturePreview=null;view()}
-function applyCapturePreview(){
-  if(!capturePreview?.meals.length)return;
-  P=capturePreview.meals;S.text=captureText;S.off={};S.moff={};capturePreview=null;planError='';save();showSuccess('Plano aplicado. Revise as refeições abaixo.');view();
+const analyzeCapture=importInterpret;
+async function importPdf(input){
+  const file=input.files?.[0];input.value='';
+  if(!file)return;
+  imp.loading=true;imp.error='';imp.fileName=file.name;view();
+  try{
+    const {text,pages,schedules}=await extractPdfLines(file);
+    if(schedules.length>1){
+      imp.pdfSchedules=schedules;imp.pdfPages=pages;imp.mode='pdf-schedule';imp.source='pdf';
+      return;
+    }
+    applyPdfText(schedules[0]?.text||text,pages,schedules[0]?.name||'');
+  }catch(error){imp.error=error instanceof Error?error.message:'Não foi possível ler o PDF.'}
+  finally{imp.loading=false;view()}
 }
-function toggleCaptureForm(){captureText=$('#tx')?.value??captureText;captureFormOpen=!captureFormOpen;view()}
-function loadExampleCapture(){captureText=DEF;capturePreview=null;captureFormOpen=false;view()}
-function appendCaptureFood(){
-  captureText=$('#tx')?.value??captureText;
-  const selected=$('#capture-meal')?.value,newMeal=$('#capture-new-meal')?.value.trim(),food=$('#capture-food')?.value.trim(),quantity=Number(String($('#capture-quantity')?.value||'').replace(',','.')),unit=$('#capture-unit')?.value;
-  if(!food||!Number.isFinite(quantity)||quantity<=0){planError='Informe o alimento e uma quantidade maior que zero.';view();return}
-  const meal=selected==='new'?newMeal:selected;
-  if(!meal){planError='Informe o nome da nova refeição.';view();return}
-  const hasMeal=captureText.split('\n').some(row=>row.trim().replace(/^#\s*/,'').split('|')[0].trim().toLocaleLowerCase('pt-BR')===meal.toLocaleLowerCase('pt-BR'));
-  const line=`${String(quantity).replace('.',',')} ${unit} ${food}`;
-  captureText=`${captureText.trim()}${hasMeal?'':'\n# '+meal}\n${line}`.trim();
-  capturePreview=null;planError='';view();
+function applyPdfText(text,pages,scheduleName=''){
+  if(!isLikelyPlan(text)){imp.error='Este PDF não parece conter um plano alimentar. Confira o arquivo ou cole o texto.';return}
+  captureText=text;
+  const {draft,stats}=buildDraft(text,impOptions());
+  if(!stats.foods){imp.error='Li o PDF, mas não encontrei alimentos com quantidade. Cole o texto para ajustar.';return}
+  imp.draft=draft;imp.stats=stats;imp.mode='review';imp.source='pdf';imp.pdfSchedules=[];
+  showSuccess(`PDF lido (${pages} página${pages>1?'s':''})${scheduleName?` · rotina ${scheduleName}`:''}. Revise antes de aplicar.`);
 }
+function importChooseSchedule(index){
+  const schedule=imp.pdfSchedules[index];
+  if(!schedule){imp.error='Esta rotina não está mais disponível. Importe o PDF novamente.';view();return}
+  applyPdfText(schedule.text,imp.pdfPages,schedule.name);
+  view();
+}
+function importPick(mode){
+  imp.error='';foodSuggestions=[];
+  if(mode==='text'){imp.mode='';imp.draft=null;view();setTimeout(()=>$('#tx')?.focus(),0);return}
+  if(mode==='manual'){imp.mode='manual';imp.manualMeal='new';imp.manualMealName='';imp.manualQuantity='';imp.manualUnit='g';imp.quick='';imp.quickPreview=null;imp.guidedCategory='';imp.draft=buildDraft(S.text,impOptions()).draft;refresh(imp,impOptions());view();return}
+}
+function importBack(){imp.mode='';imp.draft=null;imp.stats=null;imp.error='';imp.pdfSchedules=[];imp.pdfPages=0;imp.quickPreview=null;imp.manualMeal='new';imp.manualMealName='';imp.manualQuantity='';imp.manualUnit='g';foodSuggestions=[];view()}
+function importEdit(id,field,value){updateAlt(imp,id,field,value,impOptions());view()}
+function importRemove(id){removeAlt(imp,id,impOptions());view()}
+function importMeal(id,field,value){updateMeal(imp,id,field,value)}
+function importRemoveMeal(id){removeMeal(imp,id,impOptions());view()}
+function importMealSelect(value){imp.manualMeal=value;view()}
+function importMealName(value){updateManualField(imp,'manualMealName',value)}
+function importCategory(category){imp.guidedCategory=imp.guidedCategory===category?'':category;view()}
+function importCategoryOpen(open){imp.manualCategoryOpen=Boolean(open)}
+function importQuick(value){
+  if(typeof value==='string'){imp.quick=value;foodSuggestions=value.trim().length>=2&&!/\d/.test(value)&&catalogSnapshot?.approved_foods?searchFoods(value,catalogSnapshot):[]}
+  updateManualField(imp,'manualMealName',$('#imp-new-meal')?.value??imp.manualMealName??'');
+  updateManualField(imp,'manualQuantity',$('#imp-qty')?.value??imp.manualQuantity??'');
+  updateManualField(imp,'manualUnit',$('#imp-unit')?.value??imp.manualUnit??'g');
+  const qty=imp.manualQuantity.trim(),unit=imp.manualUnit,food=imp.quick.trim();
+  const text=food&&qty&&!/^\d/.test(food)?`${qty} ${unit} ${food}`:food;
+  imp.quickPreview=text?previewQuick(text):null;
+  imp.quickText=text;
+  const keep={start:document.activeElement?.selectionStart,id:document.activeElement?.id};
+  view();
+  const el=keep.id&&document.getElementById(keep.id);
+  if(el){el.focus();try{el.setSelectionRange(keep.start,keep.start)}catch{}}
+}
+function importPickFood(label){imp.quick=label;foodSuggestions=[];importQuick()}
+function importAddManual(){
+  const entries=previewQuick(imp.quickText||'');
+  if(!entries.length||!entries.every(entry=>entry.alts.every(alt=>alt.valid)))return;
+  if(imp.guidedCategory)entries.forEach(entry=>entry.alts.forEach(alt=>{alt.category=imp.guidedCategory;alt.categoryLocked=true}));
+  const result=addEntries(imp,imp.manualMeal==='new'?'':imp.manualMeal,imp.manualMealName,entries,impOptions());
+  if(result.error){imp.error=result.error;view();return}
+  imp.manualMeal=result.meal.id;imp.manualMealName='';imp.manualQuantity='';imp.manualUnit='g';imp.quick='';imp.quickPreview=null;imp.quickText='';imp.error='';foodSuggestions=[];
+  showSuccess('Item adicionado ao rascunho. Confirme para aplicar ao plano.');view();
+}
+function importConfirm(){
+  if(!imp.draft)return;
+  const {text,skipped}=serializeDraft(imp.draft);
+  if(!text){imp.error='Nenhum item válido para aplicar. Corrija as quantidades.';view();return}
+  const {meals}=parsePlanText(text,cat);
+  if(!meals.length){imp.error='Não foi possível aplicar o plano. Revise os itens.';view();return}
+  P=meals;S.text=text;S.off={};S.moff={};captureText=text;
+  imp.mode='';imp.draft=null;imp.stats=null;imp.error='';imp.quickPreview=null;
+  save();showSuccess(skipped.length?`Plano aplicado. ${skipped.length} item(ns) ficaram de fora por falta de quantidade.`:'Plano aplicado. Revise as refeições abaixo.');view();
+}
+function loadExampleCapture(){captureText=DEF;imp.draft=null;imp.mode='';view()}
 function tg(o,k){S[o][k]=!S[o][k];save();view()}
 function setCustomerName(value){S.customerName=value;save()}
 function setBudget(value){
@@ -571,8 +688,8 @@ async function createAndShareQuote(button){
     if(adminSession)await refreshAdmin();
   });
 }
-Object.assign(window,{S,DEF,save,view,go,doParse,analyzeCapture,discardCapturePreview,applyCapturePreview,toggleCaptureForm,loadExampleCapture,appendCaptureFood,tg,setCustomerName,syncCatalog,openAdmin,adminLogin,adminSendPasswordReset,adminSaveRecoveryPassword,adminLogout,saveConfigFromForm,saveFoodFromForm,editAdminFood,cancelFoodEdit,setFoodStatus,deleteFood,saveAliasFromForm,deleteAlias,startPendingFood,startRemoteFoodRequest,createAndShareQuote});
-$('#m').addEventListener('input',event=>{if(event.target.id==='cycle-budget')setBudget(event.target.value);if(event.target.id==='tx'){captureText=event.target.value;capturePreview=null}});
+Object.assign(window,{S,DEF,save,view,go,doParse,analyzeCapture,loadExampleCapture,tg,setCustomerName,syncCatalog,openAdmin,adminLogin,adminSendPasswordReset,adminSaveRecoveryPassword,adminLogout,saveConfigFromForm,saveFoodFromForm,editAdminFood,cancelFoodEdit,setFoodStatus,deleteFood,saveAliasFromForm,deleteAlias,startPendingFood,startRemoteFoodRequest,createAndShareQuote,showSuccess,importInterpret,importPdf,importChooseSchedule,importPick,importBack,importEdit,importRemove,importMeal,importRemoveMeal,importMealSelect,importMealName,importCategory,importCategoryOpen,importQuick,importPickFood,importAddManual,importConfirm});
+$('#m').addEventListener('input',event=>{if(event.target.id==='cycle-budget')setBudget(event.target.value);if(event.target.id==='tx')captureText=event.target.value});
 $('#th').onclick=()=>{const d=document.documentElement,dark=d.dataset.theme==='dark'||(!d.dataset.theme&&matchMedia('(prefers-color-scheme:dark)').matches);d.dataset.theme=S.theme=dark?'light':'dark';save();view()};
 $('#sync').onclick=syncCatalog;
 $('#admin').onclick=openAdmin;
@@ -606,9 +723,32 @@ function net(){
 }
 addEventListener('online',()=>{net();screenError='';syncCatalog()});
 addEventListener('offline',()=>{screenError='';net();view()});
+async function preparePdfEngine(){
+  if(!navigator.onLine||!('serviceWorker'in navigator))return;
+  try{
+    await navigator.serviceWorker.ready;
+    if(!navigator.serviceWorker.controller){
+      await new Promise(resolve=>{
+        const timeout=setTimeout(resolve,3000);
+        navigator.serviceWorker.addEventListener('controllerchange',()=>{clearTimeout(timeout);resolve()},{once:true});
+      });
+    }
+    if(!navigator.serviceWorker.controller)throw new Error('Recarregue o app para preparar o leitor de PDF offline.');
+    await preloadPdfEngine();
+    imp.pdfError='';
+  }catch(error){
+    imp.pdfError=`Não foi possível preparar o leitor de PDF offline: ${error instanceof Error?error.message:String(error)}`;
+  }
+  if(tab===0&&imp.mode==='')view();
+}
+addEventListener('online',preparePdfEngine);
 net();
 if(navigator.onLine&&supabaseConfigured)syncCatalog();
-if('serviceWorker'in navigator)addEventListener('load',()=>navigator.serviceWorker.register('./sw.js'));
+if('serviceWorker'in navigator)addEventListener('load',()=>{
+  navigator.serviceWorker.register('./sw.js')
+    .then(()=>preparePdfEngine())
+    .catch(reportError);
+});
 view();
 </script>
 </body>

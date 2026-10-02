@@ -2,3 +2,8 @@ node_modules/
 dist/
 .env.local
 supabase/.temp/
+
+# Versioning & Backups
+.backups/
+*.backup
+.rollback-tmp/

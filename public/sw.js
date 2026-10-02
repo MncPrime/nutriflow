@@ -1,4 +1,4 @@
-const V = 'nutriflow-v12';
+const V = 'nutriflow-v13';
 const STATIC_CACHE = V;
 const OFFLINE_DB = 'nutriflow-http-offline';
 const OFFLINE_STORE = 'supabase-cache';
@@ -54,7 +54,7 @@ async function staticStrategy(request) {
   const cache = await caches.open(STATIC_CACHE);
   try {
     const response = await fetch(request, { cache: 'no-cache' });
-    if (response.ok) cache.put(request, response.clone());
+    if (response.ok) await cache.put(request, response.clone());
     return response;
   } catch (error) {
     const cached = await cache.match(request, { ignoreSearch: false });
