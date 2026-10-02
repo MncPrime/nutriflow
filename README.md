@@ -63,7 +63,7 @@ repositório `SUPABASE_ACCESS_TOKEN` e execute manualmente o workflow
 workflow fica disponível para execução após ser integrado à branch padrão.
 
 Na atualização, a migration do IndexedDB remove preços individuais de
-catálogos e cotações antigas. O service worker v11 também limpa o cache HTTP
+catálogos e cotações antigas. O service worker v12 também limpa o cache HTTP
 antigo de respostas Supabase; somente o catálogo seguro e snapshots agregados
 continuam disponíveis offline.
 

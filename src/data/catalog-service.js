@@ -92,7 +92,12 @@ export async function requestCommercialQuote(meals, state) {
   const { data, error } = await supabase.functions.invoke('commercial-quote', {
     body: { meals, state },
   });
-  if (error) throw new Error(`Falha ao calcular orçamento: ${error.message}`);
+  if (error) {
+    const status = error.context?.status;
+    throw new Error(status === 403
+      ? 'Origem não autorizada no servidor. Acesse o app pelo endereço oficial ou libere esta origem em CORS_ALLOWED_ORIGINS.'
+      : `Falha ao calcular orçamento: ${error.message}`);
+  }
   if (!data || typeof data !== 'object' || !Array.isArray(data.lines) || !Array.isArray(data.meals)) {
     throw new Error('Supabase retornou um orçamento inválido.');
   }
