@@ -79,3 +79,83 @@ tub, prot, out. A ordem de `KW` importa (a primeira que casa vence).
 - Antes de alterar cálculo ou parser, descreva o plano de mudança e aguarde aprovação.
 - Faça mudanças pequenas, em branch próprio, e mostre o diff.
 - Não adicione dependências de runtime nem recursos que exijam rede.
+
+## Diretrizes de interface — Mobile-First
+
+Toda tela, componente e fluxo deve ser desenvolvido primeiro para smartphones.
+
+### Requisitos
+- Priorizar navegação com o polegar.
+- Usar espaçamentos confortáveis para toque.
+- Evitar interfaces desktop comprimidas no mobile.
+- Manter rolagem fluida.
+- Usar botões grandes e acessíveis.
+- Reduzir o número de cliques.
+- Priorizar sensação de aplicativo nativo.
+- Adaptar para tablet e desktop somente depois que o mobile estiver correto.
+
+### Critério de aprovação
+A funcionalidade só está pronta quando funciona bem em tela pequena, com boa leitura, botões fáceis de tocar e sem poluição visual.
+
+## Design System — Estilo iOS Premium
+
+A interface deve seguir um padrão moderno inspirado em iOS: limpa, fluida, elegante e nativa.
+
+### Princípios visuais
+- Layout limpo e hierarquia visual clara.
+- Cantos arredondados e sombras suaves.
+- Transições fluidas e uso moderado de blur ou glass effect.
+- Alto contraste e poucos elementos por tela.
+- Consistência visual entre módulos.
+
+### Componentes esperados
+- Cards com bordas suaves.
+- Headers fixos quando fizer sentido.
+- Bottom navigation quando aplicável.
+- Skeleton loading elegante.
+- Empty states bem explicados.
+- Microinterações suaves.
+- Botões com boa área de toque.
+- Layouts compatíveis com safe area.
+
+## Light Mode e Dark Mode
+
+Nunca usar cores fixas diretamente no código para elementos da interface principal. Usar tokens, variáveis ou classes de tema, como `background`, `foreground`, `primary`, `secondary`, `muted`, `accent`, `border`, `destructive`, `success` e `warning`.
+
+### Requisitos
+- Garantir contraste adequado nos dois temas.
+- Adaptar ícones e textos ao tema.
+- Evitar sombras quebradas no dark mode.
+- Não deixar textos invisíveis ou com baixo contraste.
+- Não usar fundos brancos ou textos pretos fixos em telas que suportam os dois temas.
+
+## Ícones
+
+Usar somente ícones SVG leves e limpos, preferindo traços lineares e espessura consistente. Garantir compatibilidade com light e dark mode e evitar estilos conflitantes ou ícones pesados.
+
+Bibliotecas preferidas: Lucide Icons e Heroicons; SVG customizado é permitido quando necessário. Não usar PNG, JPEG ou assets pixelados como ícones.
+
+## Bottom Sheets
+
+Todo modal mobile para ações, filtros, comentários, opções, menus e detalhes deve usar bottom sheet no estilo Instagram.
+
+## UX Premium
+
+Priorizar, nesta ordem: simplicidade, velocidade, navegação intuitiva, poucos cliques, transições suaves, sensação nativa, acessibilidade e consistência.
+
+Antes de finalizar uma funcionalidade, avaliar: **“Isso parece um aplicativo mobile iOS premium?”** Se não, ajustar a interface antes de considerar a entrega pronta.
+
+## Performance Mobile
+
+- Usar lazy loading quando fizer sentido.
+- Evitar renderizações desnecessárias.
+- Otimizar listas longas.
+- Usar skeleton loading.
+- Evitar animações pesadas e travamentos da interface.
+- Reduzir consultas repetidas.
+- Não bloquear a UI com processamentos grandes.
+- Priorizar cache local quando existir arquitetura offline-first.
+
+## Reutilização de Componentes
+
+Preferir componentes compartilhados para UI, cards, sheets, estados vazios, loading states e formulários, além de hooks e services reutilizáveis. Evitar duplicar UI ou lógica, criar variações desnecessárias do mesmo componente ou componentes locais quando já existir um padrão global.
