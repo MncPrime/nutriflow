@@ -7,8 +7,8 @@ lista de compras com custos. Publicado no GitHub Pages (https://mncprime.github.
 ## Arquivos
 - `index.html`: estrutura e lógica do app; os estilos específicos do app continuam inline.
 - `src/style.css`: entrada do Tailwind CSS, processada pelo Vite.
-- `sw.js`: service worker. Rede primeiro, cache como fallback offline.
-- `manifest.webmanifest` e `icon.svg`: instalação como PWA.
+- `public/sw.js`: service worker. Rede primeiro, cache como fallback offline.
+- `public/manifest.webmanifest` e `public/icon.svg`: instalação como PWA.
 
 O Vite processa o CSS e serve o app em desenvolvimento (`npm run dev`); use
 `npm run build` para gerar a versão de produção. O service worker exige HTTPS
@@ -63,9 +63,8 @@ tub, prot, out. A ordem de `KW` importa (a primeira que casa vence).
   `[data-theme=dark]`. Nunca usar cores fixas fora das variáveis.
 - Texto da interface em português do Brasil.
 - Qualquer leitura ou escrita em `localStorage` fica dentro de try/catch.
-- Ao mudar a lista `F` de arquivos pré-cacheados em `sw.js` (por exemplo, ao separar o
-  JavaScript em `app.js`), aumentar a versão `V`. Para mudanças só no conteúdo, não é
-  necessário, porque o service worker busca primeiro na rede.
+- Ao mudar a lógica de instalação/ativação do service worker, aumentar a versão `V`.
+  A instalação pré-carrega o HTML e os recursos locais referenciados nele.
 
 ## Limitações conhecidas (candidatas a auditoria)
 - Preços iniciais são estimativas fixas em `DEFP` e `CATS`.

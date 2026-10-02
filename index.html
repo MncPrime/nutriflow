@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>NutriFlow</title>
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icon.svg">
+<link rel="manifest" href="%BASE_URL%manifest.webmanifest">
+<link rel="icon" href="%BASE_URL%icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="%BASE_URL%icon.svg">
 <meta name="theme-color" content="#1B7F5C">
 <link href="./src/style.css" rel="stylesheet">
 <style>
@@ -21,12 +21,14 @@ header h1{font-size:20px;margin:0;letter-spacing:-.02em}
 header h1 span{color:var(--pri)}
 main{flex:1;overflow-y:auto;padding:16px;max-width:720px;width:100%;margin:0 auto}
 nav{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);background:var(--card);padding-bottom:env(safe-area-inset-bottom,0px)}
-nav button{background:none;border:0;color:var(--mut);padding:10px 4px;font:inherit;font-size:13px;min-height:52px;cursor:pointer}
+nav button{background:none;border:0;color:var(--mut);padding:6px 4px;font:inherit;font-size:13px;min-height:62px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer}
+nav button svg{width:20px;height:20px;flex:none}
 nav button[aria-current=true]{color:var(--pri);font-weight:700;box-shadow:inset 0 3px 0 var(--pri)}
 h2{font-size:18px;margin:0 0 4px}
 p.h{color:var(--mut);margin:0 0 12px;font-size:14px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
 textarea,input,select{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px}
+input[type=checkbox]{accent-color:var(--pri)}
 textarea{min-height:170px;resize:vertical}
 button.p,button.s{font:inherit;border-radius:10px;padding:11px 16px;min-height:44px;cursor:pointer;border:1px solid var(--pri)}
 button.p{background:var(--pri);color:var(--onpri);font-weight:700}
@@ -50,14 +52,30 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .ln small{color:var(--mut);display:block}
 .ln div:last-child{text-align:right;white-space:nowrap}
 .warn{color:var(--bad);font-weight:700}.good{color:var(--ok);font-weight:700}
-.mh{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.chips{display:flex;flex-wrap:wrap;gap:6px;padding:8px 0;border-top:1px solid var(--line)}.chip{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:999px;padding:6px 12px;font:inherit;font-size:13px;min-height:36px;cursor:pointer}.chip[aria-pressed=true]{border-color:var(--pri);background:color-mix(in srgb,var(--pri) 14%,var(--bg))}.chip[aria-pressed=false]{opacity:.5;text-decoration:line-through}.oh{display:block;font-weight:700;margin-top:10px}.pi{width:84px;padding:4px 6px;margin-top:4px;text-align:right}details summary{cursor:pointer;color:var(--pri);margin:8px 0;min-height:32px}
+.mh{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.chips{display:flex;flex-wrap:wrap;gap:8px;padding:10px 0 2px;border-top:1px solid var(--line)}.chip{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:999px;padding:8px 12px;font:inherit;font-size:13px;min-height:40px;cursor:pointer}.chip[aria-pressed=true]{border-color:var(--pri);background:color-mix(in srgb,var(--pri) 14%,var(--bg))}.chip[aria-pressed=false]{opacity:.55;text-decoration:line-through}.oh{display:block;font-weight:700;margin-top:10px}.pi{width:84px;padding:4px 6px;margin-top:4px;text-align:right}details summary{cursor:pointer;color:var(--pri);margin:8px 0;min-height:32px}
 input[type=checkbox]{width:22px;height:22px;flex:none;padding:0}.mh label,.oh{display:flex;align-items:center;gap:8px}header .row>*{flex:none}
 .empty{text-align:center;color:var(--mut);padding:32px 8px}
 .net{font-size:12px;color:var(--mut)}
+#th{display:grid;place-items:center;padding:0}
+.plan-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px}
+.plan-heading h2{font-size:22px;margin:0}
+.plan-count{flex:none;border:1px solid var(--line);border-radius:999px;padding:4px 9px;color:var(--mut);font-size:12px}
+.plan-description{font-size:14px;color:var(--mut);margin:0 0 16px}
+.plan-meals{display:grid;gap:10px}
+.plan-meal{padding:14px;margin:0;border-radius:14px}
+.plan-meal-head{padding-bottom:10px;border-bottom:1px solid var(--line);margin:0}
+.plan-meal-toggle{font-weight:700;min-width:0}
+.plan-meal-toggle input{width:24px;height:24px}
+.plan-meal-name{font-size:17px;line-height:1.25}
+.plan-time{flex:none;border-radius:999px;background:color-mix(in srgb,var(--pri) 10%,var(--card));color:var(--pri);padding:4px 9px;font-size:12px;font-weight:600}
+.plan-meal .oh{margin:10px 0 0;padding:7px 10px;border-radius:8px;background:var(--bg);font-size:13px}
+.plan-meal .oh input{width:20px;height:20px}
+.plan-meal-head + .chips{border-top:0;padding-top:10px}
+@media(max-width:420px){.plan-meal{padding:12px}.plan-heading h2{font-size:20px}.plan-meal-name{font-size:16px}.chip{font-size:12px;padding:7px 10px;min-height:38px}}
 </style>
 </head>
 <body>
-<header><h1 class="font-bold">Nutri<span>Flow</span></h1><div class="row" style="flex:0"><span class="net" id="net"></span><button class="s" id="th" aria-label="Alternar tema" style="min-width:44px;padding:6px 10px"></button></div></header>
+<header><h1 class="font-bold">Nutri<span>Flow</span></h1><div class="row" style="flex:0"><span class="net" id="net"></span><button class="s" id="th" style="min-width:44px" aria-label="Alternar tema"></button></div></header>
 <main id="m"></main>
 <nav id="nav"></nav>
 <script>
@@ -113,6 +131,9 @@ const save=()=>{S.tab=tab;try{localStorage.setItem('nf2',JSON.stringify(S))}catc
 const fmt=n=>'R$ '+n.toFixed(2).replace('.',',');
 const kg=g=>g>=1000?(g/1000).toFixed(2).replace('.',',')+' kg':Math.round(g)+' g';
 const num=s=>{s=s.replace(',','.');if(s.includes('/')){const[a,b]=s.split('/');return a/b}return parseFloat(s)};
+const themeIcon=dark=>dark
+  ?'<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>'
+  :'<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.463.402.807a6.5 6.5 0 0 0 8.268 8.268c.344-.215.829-.003.803.397Z"/></svg>';
 function parseAlt(p,prev){
   const m=p.trim().match(/^(\d+\/\d+|\d+(?:[.,]\d+)?)\s*(kg|g|ml|un|und|unid\w*|fatias?)?\s+(.*)$/i);
   if(m){let q=num(m[1]),u=(m[2]||'un').toLowerCase();if(u==='kg'){q*=1000;u='g'}if(u==='ml')u='g';const g=u==='g'?q:0;return{name:m[3].trim(),g,n:g?0:q,cat:cat(m[3])}}
@@ -166,18 +187,27 @@ function plan(){
 const fq=(l,v)=>l.mode==='n'?Math.ceil(v-1e-9)+' un':kg(v);
 const esc=s=>s.replace(/"/g,'&quot;');
 function view(){
-  $('#nav').innerHTML=['Plano','Ciclo','Marmitas','Compras'].map((t,i)=>`<button aria-current="${tab===i}" onclick="go(${i})">${t}</button>`).join('');
+  const navIcons=[
+    '<path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><path d="M9 3h6v4H9zM9 12h6m-6 4h6"/>',
+    '<path d="M8 2v4m8-4v4M3 10h18"/><rect x="3" y="4" width="18" height="18" rx="2"/>',
+    '<path d="M4 9h16v11H4zM3 9h18M8 9V6h8v3m-8 5h8m-8 3h5"/>',
+    '<path d="M6 7h12l1 14H5L6 7Z"/><path d="M9 7a3 3 0 0 1 6 0"/>'
+  ];
+  $('#nav').innerHTML=['Plano','Ciclo','Marmitas','Compras'].map((t,i)=>`<button aria-current="${tab===i}" onclick="go(${i})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${navIcons[i]}</svg><span>${t}</span></button>`).join('');
   const d=document.documentElement;
-  $('#th').textContent=d.dataset.theme==='dark'||(!d.dataset.theme&&matchMedia('(prefers-color-scheme:dark)').matches)?'☀':'☾';
+  const dark=d.dataset.theme==='dark'||(!d.dataset.theme&&matchMedia('(prefers-color-scheme:dark)').matches);
+  $('#th').innerHTML=themeIcon(dark);
+  $('#th').setAttribute('aria-label',dark?'Ativar tema claro':'Ativar tema escuro');
   const m=$('#m');
   if(tab===0){
-    m.innerHTML=`<h2>Plano alimentar</h2><p class="h">Toque nas opções que você aceita comer; as riscadas ficam fora do ciclo. Só entra o que está no plano do nutricionista.</p>
-    ${P.map((x,mi)=>`<div class="card"><div class="mh"><label><input type="checkbox" ${S.moff[mi]?'':'checked'} onchange="tg('moff','${mi}')"> <b>${x.name}</b></label><span class="net">${x.time}</span></div>
-    ${x.opts.map((o,oi)=>`${o.name?`<label class="oh"><input type="checkbox" ${S.off[mi+'.'+oi]?'':'checked'} onchange="tg('off','${mi}.${oi}')"> ${o.name}</label>`:''}
-    ${o.comps.map((c,ci)=>`<div class="chips">${c.alts.map((a,ai)=>{const k=`${mi}.${oi}.${ci}.${ai}`;return `<button class="chip" aria-pressed="${!S.off[k]}" onclick="tg('off','${k}')">${a.name} · ${a.g?a.g+' g':a.n+' un'}</button>`}).join('')}</div>`).join('')}`).join('')}</div>`).join('')}
+    const activeMeals=P.filter((_,mi)=>!S.moff[mi]).length;
+    m.innerHTML=`<div class="plan-heading"><h2>Plano alimentar</h2><span class="plan-count">${activeMeals} de ${P.length} refeições</span></div><p class="plan-description">Toque nos alimentos para incluir ou remover do ciclo. As opções riscadas ficam fora do planejamento.</p>
     <details><summary>Editar plano em texto</summary><textarea id="tx" aria-label="Plano em texto">${S.text.replace(/</g,'&lt;')}</textarea>
     <p class="net"># Refeição | hora · ## Opção · um componente por linha · alternativas separadas por “ou” (sem quantidade, repete a anterior).</p>
-    <div class="row"><button class="p" onclick="doParse()">Ler plano</button><button class="s" onclick="doParse(DEF)">Restaurar exemplo</button></div></details>`;
+    <div class="row"><button class="p" onclick="doParse()">Ler plano</button><button class="s" onclick="doParse(DEF)">Restaurar exemplo</button></div></details>
+    <div class="plan-meals">${P.map((x,mi)=>`<section class="card plan-meal"><div class="mh plan-meal-head"><label class="plan-meal-toggle"><input type="checkbox" ${S.moff[mi]?'':'checked'} onchange="tg('moff','${mi}')"> <span class="plan-meal-name">${x.name}</span></label><span class="plan-time">${x.time}</span></div>
+    ${x.opts.map((o,oi)=>`${o.name?`<label class="oh"><input type="checkbox" ${S.off[mi+'.'+oi]?'':'checked'} onchange="tg('off','${mi}.${oi}')"> ${o.name}</label>`:''}
+    ${o.comps.map((c,ci)=>`<div class="chips">${c.alts.map((a,ai)=>{const k=`${mi}.${oi}.${ci}.${ai}`;return `<button class="chip" aria-pressed="${!S.off[k]}" onclick="tg('off','${k}')">${a.name} · ${a.g?a.g+' g':a.n+' un'}</button>`}).join('')}</div>`).join('')}`).join('')}</section>`).join('')}</div>`;
   }
   if(tab===1){
     m.innerHTML=`<h2>Ciclo e orçamento</h2><p class="h">Quantos dias de marmitas você vai cozinhar.</p>
@@ -205,7 +235,7 @@ if(S.theme)document.documentElement.dataset.theme=S.theme;
 P=parsePlan(S.text);
 const net=()=>$('#net').textContent=navigator.onLine?'':'offline';
 addEventListener('online',net);addEventListener('offline',net);net();
-if('serviceWorker'in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js'));
+if('serviceWorker'in navigator)addEventListener('load',()=>navigator.serviceWorker.register('./sw.js'));
 view();
 </script>
 </body>
