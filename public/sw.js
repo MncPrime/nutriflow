@@ -1,18 +1,133 @@
-const V='nutriflow-v5';
-self.addEventListener('install',e=>{e.waitUntil((async()=>{
-  const scope=new URL(self.registration.scope),index=new URL('./index.html',scope),response=await fetch(index);
-  if(!response.ok)throw new Error(`Não foi possível pré-carregar o app: ${response.status}`);
-  const html=await response.clone().text(),resources=[scope.href,index.href,...Array.from(html.matchAll(/<link\b[^>]*\bhref=["']([^"']+)["']/gi),m=>new URL(m[1],index).href).filter(url=>new URL(url).origin===scope.origin&&new URL(url).pathname.startsWith(scope.pathname))];
-  await(await caches.open(V)).addAll([...new Set(resources)]);
-  await self.skipWaiting();
-})())});
-self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==V).map(x=>caches.delete(x)))).then(()=>self.clients.claim()))});
-self.addEventListener('fetch',e=>{
-  if(e.request.method!=='GET')return;
-  e.respondWith(
-    fetch(e.request,{cache:'no-cache'}).then(n=>{
-      if(n.ok){const c=n.clone();caches.open(V).then(x=>x.put(e.request,c))}
-      return n;
-    }).catch(()=>caches.match(e.request,{ignoreSearch:true}).then(r=>r||caches.match(new URL('./index.html',self.registration.scope))))
+const V = 'nutriflow-v6';
+const STATIC_CACHE = V;
+const OFFLINE_DB = 'nutriflow-offline';
+const OFFLINE_STORE = 'supabase-cache';
+
+const isSupabaseRequest = request => {
+  try {
+    const url = new URL(request.url);
+    return /(^|\.)supabase\.co$/i.test(url.hostname) ||
+      /(^|\.)supabase\.in$/i.test(url.hostname);
+  } catch {
+    return false;
+  }
+};
+
+const openOfflineDb = () => new Promise((resolve, reject) => {
+  const request = indexedDB.open(OFFLINE_DB, 1);
+  request.onupgradeneeded = () => request.result.createObjectStore(OFFLINE_STORE, { keyPath: 'key' });
+  request.onsuccess = () => resolve(request.result);
+  request.onerror = () => reject(request.error);
+});
+
+const cacheKey = request => request.url;
+
+async function readOffline(request) {
+  try {
+    const db = await openOfflineDb();
+    const entry = await new Promise((resolve, reject) => {
+      const tx = db.transaction(OFFLINE_STORE, 'readonly');
+      const req = tx.objectStore(OFFLINE_STORE).get(cacheKey(request));
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+    if (!entry) return null;
+    return new Response(entry.body, {
+      status: entry.status || 200,
+      headers: entry.headers || { 'Content-Type': 'application/json' }
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function writeOffline(request, response) {
+  if (!response.ok) return;
+  try {
+    const body = await response.clone().text();
+    const headers = Object.fromEntries(response.headers.entries());
+    const db = await openOfflineDb();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(OFFLINE_STORE, 'readwrite');
+      tx.objectStore(OFFLINE_STORE).put({
+        key: cacheKey(request),
+        body,
+        status: response.status,
+        headers,
+        updatedAt: Date.now()
+      });
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch {
+    // Offline persistence is best-effort; the network response remains valid.
+  }
+}
+
+async function supabaseNetworkFirst(request) {
+  try {
+    const response = await fetch(request, { cache: 'no-store' });
+    await writeOffline(request, response);
+    return response;
+  } catch {
+    const cached = await readOffline(request);
+    if (cached) return cached;
+    return new Response(JSON.stringify({
+      offline: true,
+      error: 'Supabase indisponível e nenhum dado local foi encontrado.'
+    }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+async function staticStrategy(request) {
+  const cache = await caches.open(STATIC_CACHE);
+  const cached = await cache.match(request, { ignoreSearch: false });
+  const network = fetch(request, { cache: 'no-cache' }).then(response => {
+    if (response.ok) cache.put(request, response.clone());
+    return response;
+  }).catch(() => cached || null);
+  return cached || network || fetch(request);
+}
+
+self.addEventListener('install', event => {
+  event.waitUntil((async () => {
+    const scope = new URL(self.registration.scope);
+    const index = new URL('./index.html', scope);
+    const response = await fetch(index, { cache: 'no-cache' });
+    if (!response.ok) throw new Error(`Não foi possível pré-carregar o app: ${response.status}`);
+    const html = await response.clone().text();
+    const resources = [
+      scope.href,
+      index.href,
+      ...Array.from(html.matchAll(/<link\b[^>]*\bhref=["']([^"']+)["']/gi), m => new URL(m[1], index).href)
+    ].filter(url => {
+      const parsed = new URL(url);
+      return parsed.origin === scope.origin && parsed.pathname.startsWith(scope.pathname);
+    });
+    await (await caches.open(STATIC_CACHE)).addAll([...new Set(resources)]);
+    await self.skipWaiting();
+  })());
+});
+
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(key => key !== STATIC_CACHE).map(key => caches.delete(key))))
+      .then(() => self.clients.claim())
   );
+});
+
+self.addEventListener('fetch', event => {
+  const { request } = event;
+  if (request.method !== 'GET' && request.method !== 'HEAD') return;
+  if (isSupabaseRequest(request)) {
+    event.respondWith(supabaseNetworkFirst(request));
+    return;
+  }
+  if (new URL(request.url).origin === self.location.origin) {
+    event.respondWith(staticStrategy(request));
+  }
 });
