@@ -13,6 +13,8 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     name: Release Validation & Snapshot
+    permissions:
+      contents: write
     
     steps:
       - name: Checkout
@@ -162,7 +164,7 @@ jobs:
 
       - name: Upload Snapshot as Artifact
         if: success()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: release-snapshot-v${{ env.VERSION }}
           path: .backups/v*/
