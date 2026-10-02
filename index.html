@@ -27,6 +27,11 @@ body{background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-syste
 .icon{display:block;width:20px;height:20px;flex:none}
 .topbar-status{grid-column:1/-1;min-width:0;text-align:right;font-size:12px;color:var(--mut)}
 .topbar-status:empty{display:none}
+.feedback{display:flex;align-items:flex-start;gap:8px;padding:12px 14px;margin:0 0 12px;border:1px solid color-mix(in srgb,var(--ok) 28%,var(--line));border-radius:14px;background:color-mix(in srgb,var(--ok) 9%,var(--card));color:var(--ok);font-size:14px;font-weight:600}
+.feedback .icon{margin-top:1px}
+.saving-icon{width:18px;height:18px;animation:save-spin .9s linear infinite}
+@keyframes save-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.saving-icon{animation:none}}
 main{flex:1;overflow-y:auto;padding:16px;max-width:720px;width:100%;margin:0 auto}
 nav{display:grid;grid-template-columns:repeat(5,1fr);border-top:1px solid var(--line);background:var(--card);padding-bottom:env(safe-area-inset-bottom,0px)}
 nav button{background:none;border:0;color:var(--mut);padding:6px 4px;font:inherit;font-size:13px;min-height:62px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer}
@@ -41,6 +46,8 @@ textarea{min-height:170px;resize:vertical}
 button.p,button.s{font:inherit;border-radius:10px;padding:11px 16px;min-height:44px;cursor:pointer;border:1px solid var(--pri)}
 button.p{background:var(--pri);color:var(--onpri);font-weight:700}
 button.s{background:none;color:var(--pri)}
+button:disabled{opacity:.72;cursor:wait}
+.is-saving{display:inline-flex;align-items:center;justify-content:center;gap:8px}
 button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
 .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .row>*{flex:1 1 180px;min-width:0}
@@ -89,6 +96,7 @@ input[type=checkbox]{width:22px;height:22px;flex:none;padding:0}.mh label,.oh{di
 .plan-meal .oh input{width:20px;height:20px}
 .plan-meal-head + .chips{border-top:0;padding-top:10px}
 .admin-form{display:grid;gap:10px}
+.admin-form button[type=submit],#m>button.p{width:100%}
 .admin-form label{display:grid;gap:4px;font-size:13px;font-weight:600}
 .admin-form label:has(input[type=checkbox]){display:block}
 .admin-actions{display:flex;gap:8px;flex-wrap:wrap}
@@ -119,6 +127,7 @@ input[type=checkbox]{width:22px;height:22px;flex:none;padding:0}.mh label,.oh{di
 <script type="module">
 import adminIcon from './src/vendor/heroicons/24/outline/cog-6-tooth.svg?raw';
 import calendarIcon from './src/vendor/heroicons/24/outline/calendar-days.svg?raw';
+import checkCircleIcon from './src/vendor/heroicons/24/outline/check-circle.svg?raw';
 import mealsIcon from './src/vendor/heroicons/24/outline/rectangle-group.svg?raw';
 import moonIcon from './src/vendor/heroicons/24/outline/moon.svg?raw';
 import planIcon from './src/vendor/heroicons/24/outline/clipboard-document-list.svg?raw';
@@ -206,11 +215,30 @@ const cat=n=>(KW.find(k=>k[1].test(n))||['out'])[0];
 import { sanitizeFoodName } from './src/utils/food-matching.js';
 let S;try{S=JSON.parse(localStorage.getItem('nf2')||'null')}catch(e){}
 S=Object.assign({text:DEF,days:14,mode:'var',budget:0,tab:0,theme:'',off:{},moff:{},prices:{},priceOverrides:{},customerName:''},S||{});
-let tab=Number.isInteger(S.tab)&&S.tab>=0&&S.tab<=4?S.tab:0,P,catalogSnapshot=null,adminSession=null,adminData=null,adminFoodEdit=null,newFoodDraft=null,adminAuthMode='login',adminAuthMessage='',screenError='',planError='',isSyncing=false,quoteHistory=[],adminPending=[],lastQuoteLink='',liveQuote=null,liveQuoteKey='',quoteRequestInFlight='',quoteErrorKey='',offlineSnapshot=null,offlineSnapshotKey='',offlineLookupKey='',adminRequests=[];
+let tab=Number.isInteger(S.tab)&&S.tab>=0&&S.tab<=4?S.tab:0,P,catalogSnapshot=null,adminSession=null,adminData=null,adminFoodEdit=null,newFoodDraft=null,adminAuthMode='login',adminAuthMessage='',screenError='',successMessage='',successTimer=0,planError='',isSyncing=false,quoteHistory=[],adminPending=[],lastQuoteLink='',liveQuote=null,liveQuoteKey='',quoteRequestInFlight='',quoteErrorKey='',offlineSnapshot=null,offlineSnapshotKey='',offlineLookupKey='',adminRequests=[];
+const savingActions=new Set();
 S.tab=tab;
 function quoteKeyForState(state=S){return JSON.stringify({text:state.text,days:state.days,mode:state.mode,off:state.off,moff:state.moff})}
 let activeQuoteKey=quoteKeyForState();
 const save=()=>{S.tab=tab;const nextKey=quoteKeyForState();if(nextKey!==activeQuoteKey){activeQuoteKey=nextKey;liveQuote=null;liveQuoteKey='';offlineSnapshot=null;offlineSnapshotKey='';quoteErrorKey='';lastQuoteLink=''}try{localStorage.setItem('nf2',JSON.stringify(S))}catch(e){}};
+async function withSaving(button,message,action){
+  const target=button instanceof HTMLElement?button:null;
+  if(target&&(target.disabled||savingActions.has(target)))return;
+  const original=target?.innerHTML;
+  if(target){savingActions.add(target);target.disabled=true;target.setAttribute('aria-busy','true');target.classList.add('is-saving');target.innerHTML=`<svg class="saving-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" opacity=".25"/><path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Salvando…</span>`}
+  screenError='';successMessage='';clearTimeout(successTimer);
+  try{
+    await new Promise(resolve=>requestAnimationFrame(resolve));
+    const startedAt=performance.now();
+    await action();
+    const remaining=Math.max(0,550-(performance.now()-startedAt));
+    if(remaining)await new Promise(resolve=>setTimeout(resolve,remaining));
+    successMessage=message;view();successTimer=setTimeout(()=>{successMessage='';if(document.visibilityState==='visible')view()},4000)
+  }
+  catch(error){reportError(error)}
+  finally{if(target){savingActions.delete(target);target.disabled=false;target.removeAttribute('aria-busy');target.classList.remove('is-saving');target.innerHTML=original}}
+}
+function successFeedback(){return successMessage?`<div class="feedback" role="status" aria-live="polite">${inlineIcon(checkCircleIcon)}<span>${esc(successMessage)}</span></div>`:''}
 const fmtMoney=(value,currency=catalogSnapshot?.config?.currency||'BRL')=>new Intl.NumberFormat('pt-BR',{style:'currency',currency}).format(value);
 const hasPrice=value=>value!==undefined&&value!==null&&value!==''&&Number.isFinite(Number(value));
 const num=s=>{s=s.replace(',','.');if(s.includes('/')){const[a,b]=s.split('/');return a/b}return parseFloat(s)};
@@ -277,7 +305,7 @@ function ensureOnlineQuote(){
 }
 function renderAdmin(){
   if(!supabaseConfigured)return '<h2>Área administrativa</h2><p class="warn">Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY para conectar ao catálogo.</p>';
-  if(!adminSession&&adminAuthMode==='recovery')return `<h2>Redefinir senha</h2><p class="h">Escolha uma nova senha para sua conta de administrador.</p><form class="card admin-form" onsubmit="event.preventDefault();adminSaveRecoveryPassword()"><label>Nova senha<input id="admin-new-password" type="password" autocomplete="new-password" minlength="8" required></label><label>Confirme a nova senha<input id="admin-confirm-password" type="password" autocomplete="new-password" minlength="8" required></label><button class="p" type="submit">Salvar nova senha</button></form>`;
+  if(!adminSession&&adminAuthMode==='recovery')return `<h2>Redefinir senha</h2><p class="h">Escolha uma nova senha para sua conta de administrador.</p><form class="card admin-form" onsubmit="event.preventDefault();adminSaveRecoveryPassword(this.querySelector('button[type=submit]'))"><label>Nova senha<input id="admin-new-password" type="password" autocomplete="new-password" minlength="8" required></label><label>Confirme a nova senha<input id="admin-confirm-password" type="password" autocomplete="new-password" minlength="8" required></label><button class="p" type="submit">Salvar nova senha</button></form>`;
   if(!adminSession)return `<h2>Área administrativa</h2><p class="h">Entre com a conta de administrador do Supabase.</p>${adminAuthMessage?`<p class="quote-status" role="status">${esc(adminAuthMessage)}</p>`:''}<form class="card admin-form" onsubmit="event.preventDefault();adminLogin()"><label>E-mail<input id="admin-email" type="email" autocomplete="username" required></label><label>Senha<input id="admin-password" type="password" autocomplete="current-password" required></label><button class="p" type="submit">Entrar</button><button class="s" type="button" onclick="adminSendPasswordReset()">Esqueci minha senha</button></form>`;
   const config=adminData?.config||catalogSnapshot?.config||{};
   const foods=adminData?.foods||[];
@@ -289,25 +317,25 @@ function renderAdmin(){
   const validationCount=pendingCatalogFoods.length+adminRequests.length+adminPending.length;
   return `<div class="plan-heading"><h2>Área administrativa</h2><button class="s" onclick="adminLogout()">Sair</button></div>
     <section class="card"><h3>Alimentos aguardando validação (${validationCount})</h3>
-    ${pendingCatalogFoods.length?`<h4>Catálogo pendente</h4>${pendingCatalogFoods.map(food=>`<div class="admin-food"><div><b>${esc(food.canonical_name)}</b><small>${esc(food.category)} · ${esc(food.base_unit)} · ${hasPrice(food.price_per_purchase_unit)?`${fmtMoney(Number(food.price_per_purchase_unit))}/${esc(food.purchase_unit_label)}`:'Preço não informado'}</small></div><div class="admin-actions"><button class="s" onclick="editAdminFood('${esc(food.id)}')">${hasPrice(food.price_per_purchase_unit)?'Editar':'Informar preço'}</button>${hasPrice(food.price_per_purchase_unit)?`<button class="s" onclick="setFoodStatus('${esc(food.id)}','approved')">Aprovar</button>`:''}<button class="s" onclick="setFoodStatus('${esc(food.id)}','rejected')">Rejeitar</button></div></div>`).join('')}`:''}
+    ${pendingCatalogFoods.length?`<h4>Catálogo pendente</h4>${pendingCatalogFoods.map(food=>`<div class="admin-food"><div><b>${esc(food.canonical_name)}</b><small>${esc(food.category)} · ${esc(food.base_unit)} · ${hasPrice(food.price_per_purchase_unit)?`${fmtMoney(Number(food.price_per_purchase_unit))}/${esc(food.purchase_unit_label)}`:'Preço não informado'}</small></div><div class="admin-actions"><button class="s" onclick="editAdminFood('${esc(food.id)}')">${hasPrice(food.price_per_purchase_unit)?'Editar':'Informar preço'}</button>${hasPrice(food.price_per_purchase_unit)?`<button class="s" onclick="setFoodStatus('${esc(food.id)}','approved',this)">Aprovar</button>`:''}<button class="s" onclick="setFoodStatus('${esc(food.id)}','rejected',this)">Rejeitar</button></div></div>`).join('')}`:''}
     ${adminRequests.length?`<h4>Solicitações recebidas dos clientes</h4>${adminRequests.map(request=>`<div class="admin-food"><div><b>${esc(request.food_name)}</b><small>${formatQuantity(request.requested_quantity,request.base_unit)} · ${new Date(request.created_at).toLocaleString('pt-BR')}</small></div><button class="s" data-request-id="${esc(request.id)}" onclick="startRemoteFoodRequest(this.dataset.requestId)">${request.resolved_food_id?'Revisar cadastro':'Cadastrar alimento'}</button></div>`).join('')}`:''}
     ${adminPending.length?`<h4>Pendentes neste dispositivo</h4>${adminPending.map(food=>`<div class="admin-food"><div><b>${esc(food.name)}</b><small>${esc(food.category)} · ${formatQuantity(food.rawAmount,food.baseUnit)} · ${new Date(food.createdAt).toLocaleString('pt-BR')}</small></div><button class="s" data-pending-name="${esc(food.normalizedName)}" onclick="startPendingFood(this.dataset.pendingName)">${food.foodId?'Revisar catálogo':'Cadastrar alimento'}</button></div>`).join('')}`:''}
     ${validationCount===0?'<p class="net">Nenhum alimento aguardando validação.</p>':''}</section>
-    <form class="card admin-form" onsubmit="event.preventDefault();saveConfigFromForm()"><h3>Configurações comerciais</h3>
+    <form class="card admin-form" onsubmit="event.preventDefault();saveConfigFromForm(this.querySelector('button[type=submit]'))"><h3>Configurações comerciais</h3>
     <label>Nome do negócio<input id="cfg-business-name" value="${esc(config.business_name||'NutriFlow')}" required></label>
     <div class="row"><label>Moeda<input id="cfg-currency" value="${esc(config.currency||'BRL')}" maxlength="3" required></label><label>Markup (%)<input id="cfg-markup" type="number" min="0" step="0.01" value="${esc(config.markup_percent??0)}" required></label></div>
     <div class="row"><label>Taxa do app (%)<input id="cfg-fee" type="number" min="0" step="0.01" value="${esc(config.app_fee_percent??0)}" required></label><label>Embalagem por marmita<input id="cfg-packaging" type="number" min="0" step="0.01" value="${esc(config.packaging_cost_per_meal??0)}" required></label></div>
     <div class="row"><label>Confecção por marmita<input id="cfg-labor" type="number" min="0" step="0.01" value="${esc(config.labor_cost_per_meal??0)}" required></label><label>Overhead por marmita<input id="cfg-overhead" type="number" min="0" step="0.01" value="${esc(config.overhead_cost_per_meal??0)}" required></label></div>
     <label><input id="cfg-show-prices" type="checkbox" ${config.show_food_prices?'checked':''}> Exibir preço unitário dos alimentos ao cliente</label><button class="p" type="submit">Salvar configurações</button></form>
-    <section class="card"><h3>${adminFoodEdit?'Editar alimento':'Catálogo de alimentos'}</h3><form class="admin-form" onsubmit="event.preventDefault();saveFoodFromForm()">
+    <section class="card"><h3>${adminFoodEdit?'Editar alimento':'Catálogo de alimentos'}</h3><form class="admin-form" onsubmit="event.preventDefault();saveFoodFromForm(this.querySelector('button[type=submit]'))">
     <label>Nome do alimento<input id="food-name" value="${esc(editing.canonical_name||'')}" required></label>
     <div class="row"><label>Categoria<select id="food-category">${categories.map(([value,label])=>`<option value="${value}" ${editing.category===value?'selected':''}>${label}</option>`).join('')}</select></label><label>Unidade base<select id="food-unit">${[['g','Gramas'],['ml','Mililitros'],['unit','Unidade']].map(([value,label])=>`<option value="${value}" ${editing.base_unit===value?'selected':''}>${label}</option>`).join('')}</select></label></div>
     <div class="row"><label>Unidade de compra<input id="food-purchase-unit" value="${esc(editing.purchase_unit_label||'kg')}" required></label><label>Incremento por embalagem<input id="food-increment" type="number" min="0.0001" step="any" value="${esc(editing.purchase_increment??1000)}" required></label></div>
     <div class="row"><label>Preço por unidade de compra<input id="food-price" type="number" min="0" step="0.0001" value="${esc(editing.price_per_purchase_unit??'')}"></label><label>Fator de cocção<input id="food-factor" type="number" min="0.0001" step="any" value="${esc(editing.cooking_factor??1)}" required></label></div>
     <label>Status<select id="food-status">${[['pending','Pendente'],['approved','Aprovado'],['rejected','Rejeitado']].map(([value,label])=>`<option value="${value}" ${editing.approval_status===value?'selected':''}>${label}</option>`).join('')}</select></label>
     <div class="admin-actions"><button class="p" type="submit">${adminFoodEdit?'Salvar alimento':'Cadastrar alimento'}</button>${adminFoodEdit?'<button class="s" type="button" onclick="cancelFoodEdit()">Cancelar edição</button>':''}</div></form>
-    <div>${foods.filter(food=>food.approval_status!=='pending').map(food=>`<div class="admin-food"><div><b>${esc(food.canonical_name)}</b><small>${esc(statusLabels[food.approval_status]||food.approval_status)} · ${fmtMoney(Number(food.price_per_purchase_unit||0))}/${esc(food.purchase_unit_label)} · fator ${esc(food.cooking_factor)}</small></div><div class="admin-actions"><button class="s" onclick="editAdminFood('${esc(food.id)}')">Editar</button>${food.approval_status!=='approved'?`<button class="s" onclick="setFoodStatus('${esc(food.id)}','approved')">Aprovar</button>`:''}${food.approval_status!=='rejected'?`<button class="s" onclick="setFoodStatus('${esc(food.id)}','rejected')">Rejeitar</button>`:''}<button class="s" onclick="deleteFood('${esc(food.id)}')">Excluir</button></div></div>`).join('')||'<p class="net">Nenhum alimento cadastrado.</p>'}</div></section>
-    <section class="card"><h3>Sinônimos</h3><form class="admin-form" onsubmit="event.preventDefault();saveAliasFromForm()"><label>Alimento principal<select id="alias-food">${foods.map(food=>`<option value="${esc(food.id)}">${esc(food.canonical_name)}</option>`).join('')}</select></label><label>Nome alternativo<input id="alias-name" required></label><button class="p" type="submit">Adicionar sinônimo</button></form>${aliases.map(alias=>`<div class="admin-food"><div>${esc(alias.alias)}<small>${esc(foods.find(food=>food.id===alias.food_id)?.canonical_name||'Alimento')}</small></div><button class="s" onclick="deleteAlias('${esc(alias.id)}')">Remover</button></div>`).join('')}</section>
+    <div>${foods.filter(food=>food.approval_status!=='pending').map(food=>`<div class="admin-food"><div><b>${esc(food.canonical_name)}</b><small>${esc(statusLabels[food.approval_status]||food.approval_status)} · ${fmtMoney(Number(food.price_per_purchase_unit||0))}/${esc(food.purchase_unit_label)} · fator ${esc(food.cooking_factor)}</small></div><div class="admin-actions"><button class="s" onclick="editAdminFood('${esc(food.id)}')">Editar</button>${food.approval_status!=='approved'?`<button class="s" onclick="setFoodStatus('${esc(food.id)}','approved',this)">Aprovar</button>`:''}${food.approval_status!=='rejected'?`<button class="s" onclick="setFoodStatus('${esc(food.id)}','rejected',this)">Rejeitar</button>`:''}<button class="s" onclick="deleteFood('${esc(food.id)}')">Excluir</button></div></div>`).join('')||'<p class="net">Nenhum alimento cadastrado.</p>'}</div></section>
+    <section class="card"><h3>Sinônimos</h3><form class="admin-form" onsubmit="event.preventDefault();saveAliasFromForm(this.querySelector('button[type=submit]'))"><label>Alimento principal<select id="alias-food">${foods.map(food=>`<option value="${esc(food.id)}">${esc(food.canonical_name)}</option>`).join('')}</select></label><label>Nome alternativo<input id="alias-name" required></label><button class="p" type="submit">Adicionar sinônimo</button></form>${aliases.map(alias=>`<div class="admin-food"><div>${esc(alias.alias)}<small>${esc(foods.find(food=>food.id===alias.food_id)?.canonical_name||'Alimento')}</small></div><button class="s" onclick="deleteAlias('${esc(alias.id)}')">Remover</button></div>`).join('')}</section>
     <section class="card"><h3>Orçamentos recentes neste dispositivo</h3>${quoteHistory.slice(0,5).map(quote=>`<div class="admin-food"><div>${esc(quote.customerName||'Sem nome')}<small>${new Date(quote.createdAt).toLocaleString('pt-BR')} · ${quote.finalPrice==null?'provisório':fmtMoney(quote.finalPrice)}</small></div></div>`).join('')||'<p class="net">Nenhum orçamento salvo.</p>'}</section>`;
 }
 function view(){
@@ -361,9 +389,10 @@ function view(){
       :`<div class="card quote-breakdown"><div><span>Custo dos alimentos${quote.foodCost==null?' (parcial conhecido)':''}</span><b>${fmtMoney(quote.knownFoodCost,quote.currency)}</b></div><div><span>Confecção</span><b>${fmtMoney(quote.productionCost,quote.currency)}</b></div><div><span>Markup</span><b>${quote.markupAmount==null?'A confirmar':fmtMoney(quote.markupAmount,quote.currency)}</b></div><div><span>Taxa do app</span><b>${quote.appFeeAmount==null?'A confirmar':fmtMoney(quote.appFeeAmount,quote.currency)}</b></div><div><span>Entrega</span><b>A combinar</b></div></div>`;
     m.innerHTML=!quote.lines.length?`<h2>Compras e orçamento</h2>${errors}<div class="empty">Marque refeições na aba Plano ou sincronize o catálogo.</div>`:`<h2>Compras e orçamento</h2>${errors}${pending}<div class="card kpi"><div><small>Orçamento do ciclo</small><b>${quote.finalPrice==null?'A confirmar':fmtMoney(quote.finalPrice,quote.currency)}</b></div><div><small>Por marmita</small><b>${quote.unitPrice==null?'A confirmar':fmtMoney(quote.unitPrice,quote.currency)}</b></div><div><small>Itens</small><b>${quote.lines.length}</b></div></div>${budgetStatus}${breakdown}<p class="quote-status">${quote.offline&&quote.syncedAt?`Orçamento gerado offline em ${new Date(quote.syncedAt).toLocaleString('pt-BR')} — sujeito à confirmação de disponibilidade.`:quote.status==='ready'?'Orçamento calculado com o catálogo aprovado.':'Os valores dependem da validação do catálogo.'}</p>
     ${Object.keys(sections).sort().map(section=>`<div class="sec">${esc(section)}</div>${sections[section].map(line=>`<div class="ln"><div>${esc(line.name)}<small>${line.unitMismatch?'Unidade incompatível com o catálogo':line.pending?'Aguardando aprovação ou preço do administrador':line.pricingUnavailable?'Preço protegido; conecte ao servidor para calcular':line.category==='out'||line.category==='supl'||line.category==='ovo'?'Necessário '+formatQuantity(line.rawAmount,line.baseUnit):'Prescrito '+formatQuantity(line.prescribedAmount,line.baseUnit)+' → cru '+formatQuantity(line.rawAmount,line.baseUnit)}</small>${line.pending?'<small class="quote-pending">Pendente de validação</small>':''}</div><div><b>${line.purchaseAmount==null?'A confirmar':formatQuantity(line.purchaseAmount,line.unitLabel)}</b>${line.showUnitPrice&&line.unitPrice!=null?`<small>${fmtMoney(line.unitPrice)}/${esc(line.unitLabel)}</small>`:''}${line.showUnitPrice&&line.purchaseCost!=null?`<small>Compra: ${fmtMoney(line.purchaseCost)}</small>`:''}</div></div>`).join('')}`).join('')}
-    ${quote.lines.length&&quote.marmitaCount?`<button class="p" onclick="createAndShareQuote()">${quote.status==='ready'?'Salvar orçamento e preparar WhatsApp':quote.pendingFoods.length?'Salvar solicitação para validação':'Salvar orçamento provisório'}</button>`:''}${lastQuoteLink?`<p><a class="s" href="${lastQuoteLink}" target="_blank" rel="noopener">Abrir orçamento no WhatsApp</a></p>`:''}${quote.offline&&quote.syncedAt?`<p class="net">Catálogo sincronizado em ${new Date(quote.syncedAt).toLocaleString('pt-BR')}.</p>`:''}`;
+    ${quote.lines.length&&quote.marmitaCount?`<button class="p" onclick="createAndShareQuote(this)">${quote.status==='ready'?'Salvar orçamento e preparar WhatsApp':quote.pendingFoods.length?'Salvar solicitação para validação':'Salvar orçamento provisório'}</button>`:''}${lastQuoteLink?`<p><a class="s" href="${lastQuoteLink}" target="_blank" rel="noopener">Abrir orçamento no WhatsApp</a></p>`:''}${quote.offline&&quote.syncedAt?`<p class="net">Catálogo sincronizado em ${new Date(quote.syncedAt).toLocaleString('pt-BR')}.</p>`:''}`;
   }
   if(tab===4)m.innerHTML=renderAdmin();
+  if(successMessage)m.insertAdjacentHTML('afterbegin',successFeedback());
   if(screenError)m.insertAdjacentHTML('afterbegin',`<p class="sync-error" role="alert">${esc(screenError)}</p>`);
   if(planError)m.insertAdjacentHTML('afterbegin',`<p class="warn" role="alert">${esc(planError)}</p>`);
   ensureOnlineQuote();
@@ -423,67 +452,64 @@ async function adminSendPasswordReset(){
     view();
   }catch(error){reportError(error)}
 }
-async function adminSaveRecoveryPassword(){
-  screenError='';
+async function adminSaveRecoveryPassword(button){
   const password=$('#admin-new-password').value;
   if(password!==$('#admin-confirm-password').value){reportError(new Error('As senhas não coincidem.'));return}
-  try{
+  return withSaving(button,'Senha atualizada com sucesso.',async()=>{
     await updateAdminPassword(password);
     adminSession=await getAdminSession();
     if(!adminSession)throw new Error('A sessão de recuperação expirou. Solicite um novo link para redefinir a senha.');
     adminAuthMode='login';adminAuthMessage='';
-    await refreshAdmin();view();
-  }catch(error){reportError(error)}
+    await refreshAdmin();
+  });
 }
 async function adminLogout(){
   try{await signOutAdmin();adminSession=null;adminData=null;adminFoodEdit=null;newFoodDraft=null;screenError='';view()}
   catch(error){reportError(error)}
 }
-async function saveConfigFromForm(){
+async function saveConfigFromForm(button){
   const config=adminData?.config;
   if(!config?.id){reportError(new Error('A configuração comercial ativa não foi encontrada.'));return}
-  try{
+  return withSaving(button,'Configurações salvas.',async()=>{
     await saveAdminConfig({id:config.id,business_name:$('#cfg-business-name').value,currency:$('#cfg-currency').value,show_food_prices:$('#cfg-show-prices').checked,packaging_cost_per_meal:$('#cfg-packaging').value,labor_cost_per_meal:$('#cfg-labor').value,overhead_cost_per_meal:$('#cfg-overhead').value,markup_percent:$('#cfg-markup').value,app_fee_percent:$('#cfg-fee').value});
-    await refreshAdmin();catalogSnapshot=await synchronizeCatalog();liveQuote=null;liveQuoteKey='';screenError='';view();
-  }catch(error){reportError(error)}
+    await refreshAdmin();catalogSnapshot=await synchronizeCatalog();liveQuote=null;liveQuoteKey='';
+  });
 }
 function foodFormValues(status=$('#food-status').value){
   return{id:adminFoodEdit||undefined,canonical_name:$('#food-name').value,category:$('#food-category').value,base_unit:$('#food-unit').value,purchase_unit_label:$('#food-purchase-unit').value,purchase_increment:$('#food-increment').value,price_per_purchase_unit:$('#food-price').value,cooking_factor:$('#food-factor').value,approval_status:status};
 }
-async function saveFoodFromForm(){
+async function saveFoodFromForm(button){
   const food=foodFormValues();
   if(food.approval_status==='approved'&&!hasPrice(food.price_per_purchase_unit)){reportError(new Error('Informe um preço válido antes de aprovar o alimento.'));return}
-  try{
+  return withSaving(button,adminFoodEdit?'Alimento atualizado.':'Alimento cadastrado.',async()=>{
     const pendingName=newFoodDraft?.normalizedName;
     const requestId=newFoodDraft?.requestId;
     const savedFood=await saveAdminFood(food);
     if(requestId)await resolveFoodValidationRequest(requestId,food.approval_status,savedFood.id);
     if(pendingName)await deletePendingFood(pendingName);
-    adminFoodEdit=null;newFoodDraft=null;await refreshAdmin();catalogSnapshot=await synchronizeCatalog();liveQuote=null;liveQuoteKey='';screenError='';view();
-  }catch(error){reportError(error)}
+    adminFoodEdit=null;newFoodDraft=null;await refreshAdmin();catalogSnapshot=await synchronizeCatalog();liveQuote=null;liveQuoteKey='';
+  });
 }
 function editAdminFood(id){adminFoodEdit=id;newFoodDraft=null;screenError='';view()}
 function cancelFoodEdit(){adminFoodEdit=null;newFoodDraft=null;view()}
-async function setFoodStatus(id,status){
+async function setFoodStatus(id,status,button){
   const food=adminData?.foods.find(item=>item.id===id);
   if(!food)return;
   if(status==='approved'&&!hasPrice(food.price_per_purchase_unit)){reportError(new Error('Edite o alimento e informe um preço válido antes de aprová-lo.'));return}
-  try{
+  return withSaving(button,status==='approved'?'Alimento aprovado.':'Status do alimento atualizado.',async()=>{
     await saveAdminFood({...food,approval_status:status});
     const request=adminRequests.find(item=>item.resolved_food_id===id);
     if(request)await resolveFoodValidationRequest(request.id,status,id);
-    await refreshAdmin();catalogSnapshot=await synchronizeCatalog();liveQuote=null;liveQuoteKey='';screenError='';view();
-  }
-  catch(error){reportError(error)}
+    await refreshAdmin();catalogSnapshot=await synchronizeCatalog();liveQuote=null;liveQuoteKey='';
+  });
 }
 async function deleteFood(id){
   if(!confirm('Excluir este alimento e seus sinônimos?'))return;
   try{await deleteAdminFood(id);await refreshAdmin();catalogSnapshot=await synchronizeCatalog();liveQuote=null;liveQuoteKey='';adminFoodEdit=null;screenError='';view()}
   catch(error){reportError(error)}
 }
-async function saveAliasFromForm(){
-  try{await saveAdminAlias({foodId:$('#alias-food').value,alias:$('#alias-name').value});await refreshAdmin();catalogSnapshot=await synchronizeCatalog();liveQuote=null;liveQuoteKey='';screenError='';view()}
-  catch(error){reportError(error)}
+async function saveAliasFromForm(button){
+  return withSaving(button,'Sinônimo adicionado.',async()=>{await saveAdminAlias({foodId:$('#alias-food').value,alias:$('#alias-name').value});await refreshAdmin();catalogSnapshot=await synchronizeCatalog();liveQuote=null;liveQuoteKey=''});
 }
 async function deleteAlias(id){
   try{await deleteAdminAlias(id);await refreshAdmin();catalogSnapshot=await synchronizeCatalog();liveQuote=null;liveQuoteKey='';screenError='';view()}
@@ -518,8 +544,8 @@ function startRemoteFoodRequest(requestId){
   };
   view();
 }
-async function createAndShareQuote(){
-  try{
+async function createAndShareQuote(button){
+  return withSaving(button,'Orçamento salvo. Você já pode abrir o WhatsApp.',async()=>{
     const quote=plan().quote,snapshot=createQuoteSnapshot(quote,S,S.customerName);
     for(const pending of quote.pendingFoods)await savePendingFood({...pending,normalizedName:sanitizeFoodName(pending.name),createdAt:new Date().toISOString()});
     await saveQuoteSnapshot(snapshot);lastQuoteLink=formatWhatsAppQuote(snapshot);screenError='';
@@ -530,8 +556,7 @@ async function createAndShareQuote(){
       }catch(error){screenError=error instanceof Error?error.message:String(error)}
     }
     if(adminSession)await refreshAdmin();
-    view();
-  }catch(error){reportError(error)}
+  });
 }
 Object.assign(window,{S,DEF,save,view,go,doParse,tg,setCustomerName,syncCatalog,openAdmin,adminLogin,adminSendPasswordReset,adminSaveRecoveryPassword,adminLogout,saveConfigFromForm,saveFoodFromForm,editAdminFood,cancelFoodEdit,setFoodStatus,deleteFood,saveAliasFromForm,deleteAlias,startPendingFood,startRemoteFoodRequest,createAndShareQuote});
 $('#m').addEventListener('input',event=>{if(event.target.id==='cycle-budget')setBudget(event.target.value)});
