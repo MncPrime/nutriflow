@@ -107,7 +107,7 @@ test('catalog aliases resolve foods and a disabled per-food price display remain
   assert.equal(quote.lines[0].showUnitPrice, false);
 });
 
-test('shared quote keeps aggregate costs while hiding individual food prices', () => {
+test('shared quote hides internal cost breakdown while preserving the customer price', () => {
   const quote = calculateCommercialQuote(
     mealPlan,
     { days: 7, mode: 'var', off: {}, moff: {} },
@@ -117,10 +117,23 @@ test('shared quote keeps aggregate costs while hiding individual food prices', (
   const link = formatWhatsAppQuote(snapshot);
   const message = decodeURIComponent(link.split('?text=')[1]);
 
+  assert.doesNotMatch(message, /Custo dos alimentos:|Custo de confecção:|Markup:|Taxa do app:/);
+  assert.match(message, /Entrega: A combinar/);
+  assert.match(message, /Total estimado:/);
+});
+
+test('shared quote shows the cost breakdown when the admin enables food prices', () => {
+  const quote = calculateCommercialQuote(
+    mealPlan,
+    { days: 7, mode: 'var', off: {}, moff: {} },
+    { foods, aliases: [], config: { ...config, show_food_prices: true } },
+  );
+  const snapshot = createQuoteSnapshot(quote, { days: 7, mode: 'var' }, 'Cliente');
+  const message = decodeURIComponent(formatWhatsAppQuote(snapshot).split('?text=')[1]);
+
   assert.match(message, /Custo dos alimentos:/);
   assert.match(message, /Markup:/);
   assert.match(message, /Taxa do app:/);
-  assert.match(message, /Entrega: A combinar/);
   assert.match(message, /Total estimado:/);
 });
 

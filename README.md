@@ -61,13 +61,11 @@ catálogos e cotações antigas. O service worker v10 também limpa o cache HTTP
 antigo de respostas Supabase; somente o catálogo seguro e snapshots agregados
 continuam disponíveis offline.
 
-O parâmetro `show_food_prices` controla se o cliente recebe preço unitário e
-custo de compra por item. Subtotais agregados, confecção, markup/taxa, total e
-valor por marmita continuam na resposta comercial. Como qualquer orçamento
-agregado pode permitir inferências se alguém criar planos artificiais, um
-lançamento com preços realmente confidenciais também deve adicionar limites de
-uso/abuso e autenticação ou validação comercial no servidor. B2B (tenants,
-volume, recorrência e exportação) ainda não está definido nem incluído.
+O parâmetro `show_food_prices` controla a visibilidade dos preços individuais e
+da decomposição interna (custos agregados de alimentos, confecção, markup e taxa).
+Com a opção desativada, o cliente ainda recebe preço final do ciclo e valor por
+marmita, mas não a composição comercial interna. B2B (tenants, volume,
+recorrência e exportação) ainda não está definido nem incluído.
 
 As solicitações de alimentos novos são guardadas localmente quando offline e
 enviadas à fila Supabase ao reconectar. O plano alimentar permanece fonte da
