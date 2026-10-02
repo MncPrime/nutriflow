@@ -81,6 +81,7 @@ input[type=checkbox]{width:22px;height:22px;flex:none;padding:0}.mh label,.oh{di
 .plan-editor textarea{margin:4px 0}
 .plan-editor .row{margin-top:12px}
 .plan-editor-hint{margin:0 0 12px;color:var(--mut);font-size:14px}
+.capture-card{padding:14px}.capture-card h3{margin:0 0 4px;font-size:17px}.capture-card textarea{min-height:132px}.capture-actions{display:grid;grid-template-columns:1fr;gap:8px;margin-top:12px}.capture-actions button{width:100%}.capture-guide{margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}.capture-guide h4{margin:0 0 8px;font-size:15px}.capture-guide .row{gap:8px}.capture-preview{margin-top:12px;border-top:1px solid var(--line);padding-top:12px}.capture-preview h4{margin:0 0 8px;font-size:15px}.capture-preview ul,.capture-warnings{margin:8px 0;padding-left:20px}.capture-preview li,.capture-warnings li{margin:4px 0}.capture-warnings{color:var(--bad);font-size:13px}.capture-source{font-size:13px;color:var(--mut);margin:0 0 10px}.capture-preview-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.capture-preview-actions button{padding-inline:10px}
 .plan-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px}
 .plan-heading h2{font-size:22px;margin:0}
 .plan-count{flex:none;border:1px solid var(--line);border-radius:999px;padding:4px 9px;color:var(--mut);font-size:12px}
@@ -141,6 +142,7 @@ import {
   formatQuantity,
   formatWhatsAppQuote,
 } from './src/domain/commercial.js';
+import { parsePlanText } from './src/domain/plan-parser.js';
 import {
   getAdminSession,
   loadAdminData,
@@ -215,7 +217,7 @@ const cat=n=>(KW.find(k=>k[1].test(n))||['out'])[0];
 import { sanitizeFoodName } from './src/utils/food-matching.js';
 let S;try{S=JSON.parse(localStorage.getItem('nf2')||'null')}catch(e){}
 S=Object.assign({text:DEF,days:14,mode:'var',budget:0,tab:0,theme:'',off:{},moff:{},prices:{},priceOverrides:{},customerName:''},S||{});
-let tab=Number.isInteger(S.tab)&&S.tab>=0&&S.tab<=4?S.tab:0,P,catalogSnapshot=null,adminSession=null,adminData=null,adminFoodEdit=null,newFoodDraft=null,adminAuthMode='login',adminAuthMessage='',screenError='',successMessage='',successTimer=0,planError='',isSyncing=false,quoteHistory=[],adminPending=[],lastQuoteLink='',liveQuote=null,liveQuoteKey='',quoteRequestInFlight='',quoteErrorKey='',offlineSnapshot=null,offlineSnapshotKey='',offlineLookupKey='',adminRequests=[];
+let tab=Number.isInteger(S.tab)&&S.tab>=0&&S.tab<=4?S.tab:0,P,catalogSnapshot=null,adminSession=null,adminData=null,adminFoodEdit=null,newFoodDraft=null,adminAuthMode='login',adminAuthMessage='',successMessage='',successTimer=0,planError='',isSyncing=false,quoteHistory=[],adminPending=[],lastQuoteLink='',liveQuote=null,liveQuoteKey='',quoteRequestInFlight='',quoteErrorKey='',offlineSnapshot=null,offlineSnapshotKey='',offlineLookupKey='',adminRequests=[],captureText=S.text,capturePreview=null,captureFormOpen=false;
 const savingActions=new Set();
 S.tab=tab;
 function quoteKeyForState(state=S){return JSON.stringify({text:state.text,days:state.days,mode:state.mode,off:state.off,moff:state.moff})}
@@ -241,30 +243,11 @@ async function withSaving(button,message,action){
 function successFeedback(){return successMessage?`<div class="feedback" role="status" aria-live="polite">${inlineIcon(checkCircleIcon)}<span>${esc(successMessage)}</span></div>`:''}
 const fmtMoney=(value,currency=catalogSnapshot?.config?.currency||'BRL')=>new Intl.NumberFormat('pt-BR',{style:'currency',currency}).format(value);
 const hasPrice=value=>value!==undefined&&value!==null&&value!==''&&Number.isFinite(Number(value));
-const num=s=>{s=s.replace(',','.');if(s.includes('/')){const[a,b]=s.split('/');return a/b}return parseFloat(s)};
 const inlineIcon=svg=>svg.replace('<svg ','<svg class="icon" ');
 const themeIcon=dark=>inlineIcon(dark?sunIcon:moonIcon);
 $('#sync').innerHTML=inlineIcon(syncIcon);
 $('#admin').innerHTML=inlineIcon(adminIcon);
-function parseAlt(p,prev){
-  const m=p.trim().match(/^(\d+\/\d+|\d+(?:[.,]\d+)?)\s*(kg|g|ml|un|und|unid\w*|fatias?)?\s+(.*)$/i);
-  if(m){let q=num(m[1]),u=(m[2]||'un').toLowerCase();if(u==='kg'){q*=1000;u='g'}const g=u==='g'?q:0,ml=u==='ml'?q:0;return{name:m[3].trim(),g,ml,n:g||ml?0:q,cat:cat(m[3])}}
-  return prev?{name:p.trim(),g:prev.g,ml:prev.ml||0,n:prev.n,cat:cat(p)}:null;
-}
-function parsePlan(t){
-  const ms=[];let m,o;
-  for(const raw of t.split('\n')){
-    const l=raw.trim();if(!l)continue;
-    if(l[0]==='#'&&l[1]!=='#'){const[n,h]=l.slice(1).split('|');m={name:n.trim(),time:(h||'').trim(),opts:[]};ms.push(m);o=null;continue}
-    if(l.startsWith('##')&&m){o={name:l.slice(2).trim(),comps:[]};m.opts.push(o);continue}
-    if(!m||!/\d/.test(l))continue;
-    if(!o){o={name:'',comps:[]};m.opts.push(o)}
-    let prev=null;const alts=[];
-    for(const p of l.split(/\s+ou\s+/i)){const a=parseAlt(p,prev);if(a){alts.push(a);prev=a}}
-    if(alts.length)o.comps.push({alts});
-  }
-  return ms;
-}
+function parsePlan(t){return parsePlanText(t,cat).meals}
 const sector=it=>it.cat==='supl'?'Suplementos':it.cat==='prot'?'Açougue':it.cat==='ovo'||/queijo|mussarela|iogurte|leite/i.test(it.name)?'Laticínios e ovos':/p[aã]o/i.test(it.name)?'Padaria':it.cat==='tub'||/banana|ma[cç][aã]|pera|manga|mam[aã]o|abacaxi|tangerina|laranja|lim[aã]o|kiwi|cenoura|beterraba|vagem|br[oó]colis|couve|chuchu|abobrinha|tomate|pepino/i.test(it.name)?'Hortifrúti':'Mercearia';
 function plan(){
   const key=quoteKeyForState();
@@ -348,10 +331,13 @@ function view(){
   const m=$('#m');
   if(tab===0){
     const activeMeals=P.filter((_,mi)=>!S.moff[mi]).length;
+    const draftMeals=(capturePreview?.meals||P).map(meal=>meal.name);
+    const preview=capturePreview?`<section class="capture-preview" aria-live="polite"><h4>Prévia do plano</h4><p class="capture-source">${capturePreview.meals.length} refeição(ões) reconhecida(s). Revise antes de aplicar.</p>${capturePreview.meals.length?`<ul>${capturePreview.meals.map(meal=>`<li><b>${esc(meal.name)}</b>${meal.time?` · ${esc(meal.time)}`:''} — ${meal.opts.reduce((total,opt)=>total+opt.comps.length,0)} item(ns)</li>`).join('')}</ul>`:''}${capturePreview.warnings.length?`<ul class="capture-warnings">${capturePreview.warnings.map(warning=>`<li>${esc(warning)}</li>`).join('')}</ul>`:''}<div class="capture-preview-actions"><button class="s" type="button" onclick="discardCapturePreview()">Continuar editando</button><button class="p" type="button" onclick="applyCapturePreview()" ${capturePreview.meals.length?'':'disabled'}>Aplicar plano</button></div></section>`:'';
     m.innerHTML=`<div class="plan-heading"><h2>Plano alimentar</h2><span class="plan-count">${activeMeals} de ${P.length} refeições</span></div><p class="plan-description">Toque nos alimentos para incluir ou remover do ciclo. As opções riscadas ficam fora do planejamento.</p>
-    <details class="card plan-editor"><summary>Editar plano em texto</summary><textarea id="tx" aria-label="Plano em texto">${esc(S.text)}</textarea>
-    <p class="plan-editor-hint"># Refeição | hora · ## Opção · um componente por linha · alternativas separadas por “ou” (sem quantidade, repete a anterior).</p>
-    <div class="row"><button class="p" onclick="doParse()">Ler plano</button><button class="s" onclick="doParse(DEF)">Restaurar exemplo</button></div></details>
+    <section class="card capture-card"><h3>Adicionar ou importar plano</h3><p class="plan-editor-hint">Cole o plano como recebeu ou monte item por item. Nada é aplicado antes da sua confirmação.</p><textarea id="tx" aria-label="Plano em texto" placeholder="# Café da manhã | 07:00&#10;2 un ovo&#10;150 g mamão">${esc(captureText)}</textarea>
+    <div class="capture-actions"><button class="p" type="button" onclick="analyzeCapture()">Analisar plano</button><button class="s" type="button" onclick="toggleCaptureForm()">${captureFormOpen?'Fechar inclusão guiada':'Adicionar alimento guiado'}</button></div>
+    ${captureFormOpen?`<div class="capture-guide"><h4>Adicionar alimento</h4><div class="row"><label>Refeição<select id="capture-meal"><option value="new">Nova refeição</option>${draftMeals.map(name=>`<option value="${esc(name)}">${esc(name)}</option>`).join('')}</select></label><label>Nome da nova refeição<input id="capture-new-meal" placeholder="Ex.: Café da manhã"></label></div><label>Alimento<input id="capture-food" placeholder="Ex.: arroz integral cozido"></label><div class="row"><label>Quantidade<input id="capture-quantity" type="number" min="0.01" step="any" inputmode="decimal" placeholder="Ex.: 150"></label><label>Unidade<select id="capture-unit"><option value="g">gramas</option><option value="ml">mililitros</option><option value="un">unidades</option><option value="fatias">fatias</option></select></label></div><button class="s" type="button" onclick="appendCaptureFood()">Adicionar ao rascunho</button></div>`:''}
+    ${preview}<details class="plan-editor"><summary>Ajuda para texto colado</summary><p class="plan-editor-hint">Use # para uma refeição, ## para opções e “ou” entre alternativas. Entendemos g, gramas, kg, ml, litros, un, unidades e fatias. A extração de PDF será adicionada aqui no futuro; por enquanto, cole o texto extraído do documento.</p><button class="s" type="button" onclick="loadExampleCapture()">Usar exemplo</button></details></section>
     <div class="plan-meals">${P.map((x,mi)=>`<section class="card plan-meal"><div class="mh plan-meal-head"><label class="plan-meal-toggle"><input type="checkbox" ${S.moff[mi]?'':'checked'} onchange="tg('moff','${mi}')"> <span class="plan-meal-name">${esc(x.name)}</span></label><span class="plan-time">${esc(x.time)}</span></div>
     ${x.opts.map((o,oi)=>`${o.name?`<label class="oh"><input type="checkbox" ${S.off[mi+'.'+oi]?'':'checked'} onchange="tg('off','${mi}.${oi}')"> ${esc(o.name)}</label>`:''}
     ${o.comps.map((c,ci)=>`<div class="chips">${c.alts.map((a,ai)=>{const k=`${mi}.${oi}.${ci}.${ai}`,amount=a.g?formatQuantity(a.g,'g'):a.ml?formatQuantity(a.ml,'ml'):formatQuantity(a.n,'un');return `<button class="chip" aria-pressed="${!S.off[k]}" onclick="tg('off','${k}')">${esc(a.name)} · ${amount}</button>`}).join('')}</div>`).join('')}`).join('')}</section>`).join('')}</div>`;
@@ -399,9 +385,31 @@ function view(){
 }
 function go(i){tab=Math.min(4,Math.max(0,Number(i)||0));screenError='';save();view();$('#m').scrollTop=0}
 function doParse(t){
-  const text=t??$('#tx')?.value??S.text;
-  try{P=parsePlan(text);S.text=text;S.off={};S.moff={};planError='';save();view()}
-  catch(error){planError=error instanceof Error?error.message:String(error);view()}
+  captureText=t??$('#tx')?.value??captureText;
+  analyzeCapture();
+}
+function analyzeCapture(){
+  captureText=$('#tx')?.value??captureText;
+  try{capturePreview=parsePlanText(captureText,cat);planError='';view()}
+  catch(error){capturePreview=null;planError=error instanceof Error?error.message:String(error);view()}
+}
+function discardCapturePreview(){capturePreview=null;view()}
+function applyCapturePreview(){
+  if(!capturePreview?.meals.length)return;
+  P=capturePreview.meals;S.text=captureText;S.off={};S.moff={};capturePreview=null;planError='';save();showSuccess('Plano aplicado. Revise as refeições abaixo.');view();
+}
+function toggleCaptureForm(){captureText=$('#tx')?.value??captureText;captureFormOpen=!captureFormOpen;view()}
+function loadExampleCapture(){captureText=DEF;capturePreview=null;captureFormOpen=false;view()}
+function appendCaptureFood(){
+  captureText=$('#tx')?.value??captureText;
+  const selected=$('#capture-meal')?.value,newMeal=$('#capture-new-meal')?.value.trim(),food=$('#capture-food')?.value.trim(),quantity=Number(String($('#capture-quantity')?.value||'').replace(',','.')),unit=$('#capture-unit')?.value;
+  if(!food||!Number.isFinite(quantity)||quantity<=0){planError='Informe o alimento e uma quantidade maior que zero.';view();return}
+  const meal=selected==='new'?newMeal:selected;
+  if(!meal){planError='Informe o nome da nova refeição.';view();return}
+  const hasMeal=captureText.split('\n').some(row=>row.trim().replace(/^#\s*/,'').split('|')[0].trim().toLocaleLowerCase('pt-BR')===meal.toLocaleLowerCase('pt-BR'));
+  const line=`${String(quantity).replace('.',',')} ${unit} ${food}`;
+  captureText=`${captureText.trim()}${hasMeal?'':'\n# '+meal}\n${line}`.trim();
+  capturePreview=null;planError='';view();
 }
 function tg(o,k){S[o][k]=!S[o][k];save();view()}
 function setCustomerName(value){S.customerName=value;save()}
@@ -558,8 +566,8 @@ async function createAndShareQuote(button){
     if(adminSession)await refreshAdmin();
   });
 }
-Object.assign(window,{S,DEF,save,view,go,doParse,tg,setCustomerName,syncCatalog,openAdmin,adminLogin,adminSendPasswordReset,adminSaveRecoveryPassword,adminLogout,saveConfigFromForm,saveFoodFromForm,editAdminFood,cancelFoodEdit,setFoodStatus,deleteFood,saveAliasFromForm,deleteAlias,startPendingFood,startRemoteFoodRequest,createAndShareQuote});
-$('#m').addEventListener('input',event=>{if(event.target.id==='cycle-budget')setBudget(event.target.value)});
+Object.assign(window,{S,DEF,save,view,go,doParse,analyzeCapture,discardCapturePreview,applyCapturePreview,toggleCaptureForm,loadExampleCapture,appendCaptureFood,tg,setCustomerName,syncCatalog,openAdmin,adminLogin,adminSendPasswordReset,adminSaveRecoveryPassword,adminLogout,saveConfigFromForm,saveFoodFromForm,editAdminFood,cancelFoodEdit,setFoodStatus,deleteFood,saveAliasFromForm,deleteAlias,startPendingFood,startRemoteFoodRequest,createAndShareQuote});
+$('#m').addEventListener('input',event=>{if(event.target.id==='cycle-budget')setBudget(event.target.value);if(event.target.id==='tx'){captureText=event.target.value;capturePreview=null}});
 $('#th').onclick=()=>{const d=document.documentElement,dark=d.dataset.theme==='dark'||(!d.dataset.theme&&matchMedia('(prefers-color-scheme:dark)').matches);d.dataset.theme=S.theme=dark?'light':'dark';save();view()};
 $('#sync').onclick=syncCatalog;
 $('#admin').onclick=openAdmin;
