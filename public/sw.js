@@ -1,4 +1,4 @@
-const V = 'nutriflow-v10';
+const V = 'nutriflow-v11';
 const STATIC_CACHE = V;
 const OFFLINE_DB = 'nutriflow-http-offline';
 const OFFLINE_STORE = 'supabase-cache';
