@@ -5,12 +5,14 @@ nutricionista em marmitas planejadas, converte peso cozido em peso cru e gera a
 lista de compras com custos. Publicado no GitHub Pages (https://mncprime.github.io/nutriflow/).
 
 ## Arquivos
-- `index.html`: o app inteiro (CSS e JS inline, sem build).
+- `index.html`: estrutura e lógica do app; os estilos específicos do app continuam inline.
+- `src/style.css`: entrada do Tailwind CSS, processada pelo Vite.
 - `sw.js`: service worker. Rede primeiro, cache como fallback offline.
 - `manifest.webmanifest` e `icon.svg`: instalação como PWA.
 
-Não há bundler, framework nem dependências. Para testar: `npx serve .` na pasta
-e abrir o endereço local. O service worker exige HTTPS ou localhost.
+O Vite processa o CSS e serve o app em desenvolvimento (`npm run dev`); use
+`npm run build` para gerar a versão de produção. O service worker exige HTTPS
+ou localhost.
 
 ## Regras de negócio (invioláveis)
 1. O plano do nutricionista é a fonte da verdade. O app nunca cria, troca ou
@@ -19,7 +21,8 @@ e abrir o endereço local. O service worker exige HTTPS ou localhost.
 2. Fatores de cocção (cru = pronto ÷ fator), em `CATS`:
    proteína 0,75 · arroz 2,5 · feijão 2,8 · macarrão 2,2 · tubérculos,
    legumes e demais itens 1,0.
-3. O app é 100% offline: nenhuma chamada de rede, CDN ou fonte externa.
+3. O app não depende de chamadas de rede, CDN ou fontes externas em runtime.
+   Vite e Tailwind são ferramentas de build, não dependências de runtime.
 
 ## Modelo de dados
 O plano é texto (campo `S.text`) interpretado por `parsePlan`:
@@ -76,4 +79,4 @@ tub, prot, out. A ordem de `KW` importa (a primeira que casa vence).
 ## Como trabalhar neste projeto
 - Antes de alterar cálculo ou parser, descreva o plano de mudança e aguarde aprovação.
 - Faça mudanças pequenas, em branch próprio, e mostre o diff.
-- Não adicione dependências nem recursos que exijam rede.
+- Não adicione dependências de runtime nem recursos que exijam rede.
