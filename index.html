@@ -20,7 +20,7 @@ header{display:flex;align-items:center;justify-content:space-between;padding:12p
 header h1{font-size:20px;margin:0;letter-spacing:-.02em}
 header h1 span{color:var(--pri)}
 main{flex:1;overflow-y:auto;padding:16px;max-width:720px;width:100%;margin:0 auto}
-nav{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line);background:var(--card);padding-bottom:env(safe-area-inset-bottom,0px)}
+nav{display:grid;grid-template-columns:repeat(5,1fr);border-top:1px solid var(--line);background:var(--card);padding-bottom:env(safe-area-inset-bottom,0px)}
 nav button{background:none;border:0;color:var(--mut);padding:6px 4px;font:inherit;font-size:13px;min-height:62px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer}
 nav button svg{width:20px;height:20px;flex:none}
 nav button[aria-current=true]{color:var(--pri);font-weight:700;box-shadow:inset 0 3px 0 var(--pri)}
@@ -71,14 +71,57 @@ input[type=checkbox]{width:22px;height:22px;flex:none;padding:0}.mh label,.oh{di
 .plan-meal .oh{margin:10px 0 0;padding:7px 10px;border-radius:8px;background:var(--bg);font-size:13px}
 .plan-meal .oh input{width:20px;height:20px}
 .plan-meal-head + .chips{border-top:0;padding-top:10px}
+.admin-form{display:grid;gap:10px}
+.admin-form label{display:grid;gap:4px;font-size:13px;font-weight:600}
+.admin-form label:has(input[type=checkbox]){display:block}
+.admin-actions{display:flex;gap:8px;flex-wrap:wrap}
+.admin-food{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;border-top:1px solid var(--line);padding:10px 0}
+.admin-food:first-child{border-top:0}
+.admin-food small{display:block;color:var(--mut)}
+.admin-food button{min-height:44px}
+.sync-error{border:1px solid var(--bad);border-radius:10px;padding:10px;margin-bottom:12px;color:var(--bad)}
+.quote-status{color:var(--mut);font-size:14px}
+.quote-pending{display:block;color:var(--bad);font-size:12px}
+.quote-breakdown{display:grid;gap:8px}.quote-breakdown div{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line);padding:4px 0}.quote-breakdown span{color:var(--mut)}
 @media(max-width:420px){.plan-meal{padding:12px}.plan-heading h2{font-size:20px}.plan-meal-name{font-size:16px}.chip{font-size:12px;padding:7px 10px;min-height:38px}}
 </style>
 </head>
 <body>
-<header><h1 class="font-bold">Nutri<span>Flow</span></h1><div class="row" style="flex:0"><span class="net" id="net"></span><button class="s" id="th" style="min-width:44px" aria-label="Alternar tema"></button></div></header>
+<header><h1 class="font-bold">Nutri<span>Flow</span></h1><div class="row" style="flex:0"><span class="net" id="net"></span><button class="s" id="sync" style="min-width:44px;padding:0" aria-label="Sincronizar catálogo" title="Sincronizar catálogo"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.64 9A7 7 0 0 1 18 6l2 6M4 12l2 6a7 7 0 0 0 12.36-3"/></svg></button><button class="s" id="admin" style="min-width:44px;padding:0" aria-label="Área do administrador" title="Área do administrador"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3"/><path d="M5 20a7 7 0 0 1 14 0M19 8h3m-1.5-1.5v3"/></svg></button><button class="s" id="th" style="min-width:44px;padding:0" aria-label="Alternar tema"></button></div></header>
 <main id="m"></main>
 <nav id="nav"></nav>
-<script>
+<script type="module">
+import {
+  calculateCommercialQuote,
+  createQuoteSnapshot,
+  formatQuantity,
+  formatWhatsAppQuote,
+} from './src/domain/commercial.js';
+import {
+  getAdminSession,
+  loadAdminData,
+  loadSavedCatalog,
+  deleteAdminFood,
+  deleteAdminAlias,
+  saveAdminAlias,
+  saveAdminConfig,
+  saveAdminFood,
+  signInAdmin,
+  signOutAdmin,
+  requestCommercialQuote,
+  submitFoodValidationRequests,
+  resolveFoodValidationRequest,
+  supabaseConfigured,
+  synchronizeCatalog,
+} from './src/data/catalog-service.js';
+import {
+  getPendingFoods,
+  getCachedQuoteSnapshot,
+  getQuoteSnapshots,
+  deletePendingFood,
+  savePendingFood,
+  saveQuoteSnapshot,
+} from './src/data/local-db.js';
 const $=s=>document.querySelector(s);
 const DEF=`# Café da manhã | 06:00
 1 un banana ou 150g mamão papaia
@@ -120,24 +163,26 @@ const DEF=`# Café da manhã | 06:00
 70g feijão cozido
 100g filé de frango grelhado ou 100g carne patinho moída ou 2 un ovo cozido ou 130g peixe grelhado
 110g cenoura ou beterraba ou vagem ou brócolis ou couve-flor ou chuchu ou abobrinha ou tomate ou pepino`;
-const CATS={prot:{f:.75,p:35,s:500},arroz:{f:2.5,p:6,s:1000},feijao:{f:2.8,p:9,s:1000},tub:{f:1,p:5,s:500},mac:{f:2.2,p:8,s:500},ovo:{f:1,p:1,s:12},supl:{f:1,p:100,s:500},out:{f:1,p:12,s:250}};
 const KW=[['ovo',/\bovos?\b/i],['supl',/whey|leite em p/i],['arroz',/arroz/i],['feijao',/feij[aã]o|lentilha/i],['mac',/macarr|massa|espaguete/i],['tub',/batata|ab[oó]bora|aipim|mandioca|inhame|cabotia/i],['prot',/frango|carne|patinho|peixe|til[aá]pia|bife|merluza|salm[aã]o|ac[eé]m/i]];
-const DEFP=[[/iogurte/i,14],[/granola/i,25],[/\bmel\b/i,35],[/queijo|mussarela/i,50],[/p[aã]o/i,16],[/aveia|farelo/i,12],[/a[cç][uú]car/i,5],[/banana|ma[cç][aã]|pera|manga|mam[aã]o|abacaxi/i,8]];
 const cat=n=>(KW.find(k=>k[1].test(n))||['out'])[0];
+import { sanitizeFoodName } from './src/utils/food-matching.js';
 let S;try{S=JSON.parse(localStorage.getItem('nf2')||'null')}catch(e){}
-S=Object.assign({text:DEF,days:14,mode:'var',budget:0,tab:0,theme:'',off:{},moff:{},prices:{}},S||{});
-let tab=S.tab,P;
-const save=()=>{S.tab=tab;try{localStorage.setItem('nf2',JSON.stringify(S))}catch(e){}};
-const fmt=n=>'R$ '+n.toFixed(2).replace('.',',');
-const kg=g=>g>=1000?(g/1000).toFixed(2).replace('.',',')+' kg':Math.round(g)+' g';
+S=Object.assign({text:DEF,days:14,mode:'var',budget:0,tab:0,theme:'',off:{},moff:{},prices:{},priceOverrides:{},customerName:''},S||{});
+let tab=Number.isInteger(S.tab)&&S.tab>=0&&S.tab<=4?S.tab:0,P,catalogSnapshot=null,adminSession=null,adminData=null,adminFoodEdit=null,newFoodDraft=null,screenError='',planError='',isSyncing=false,quoteHistory=[],adminPending=[],lastQuoteLink='',liveQuote=null,liveQuoteKey='',quoteRequestInFlight='',quoteErrorKey='',offlineSnapshot=null,offlineSnapshotKey='',offlineLookupKey='',adminRequests=[];
+S.tab=tab;
+function quoteKeyForState(state=S){return JSON.stringify({text:state.text,days:state.days,mode:state.mode,off:state.off,moff:state.moff})}
+let activeQuoteKey=quoteKeyForState();
+const save=()=>{S.tab=tab;const nextKey=quoteKeyForState();if(nextKey!==activeQuoteKey){activeQuoteKey=nextKey;liveQuote=null;liveQuoteKey='';offlineSnapshot=null;offlineSnapshotKey='';quoteErrorKey='';lastQuoteLink=''}try{localStorage.setItem('nf2',JSON.stringify(S))}catch(e){}};
+const fmtMoney=(value,currency=catalogSnapshot?.config?.currency||'BRL')=>new Intl.NumberFormat('pt-BR',{style:'currency',currency}).format(value);
+const hasPrice=value=>value!==undefined&&value!==null&&value!==''&&Number.isFinite(Number(value));
 const num=s=>{s=s.replace(',','.');if(s.includes('/')){const[a,b]=s.split('/');return a/b}return parseFloat(s)};
 const themeIcon=dark=>dark
   ?'<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>'
   :'<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.463.402.807a6.5 6.5 0 0 0 8.268 8.268c.344-.215.829-.003.803.397Z"/></svg>';
 function parseAlt(p,prev){
   const m=p.trim().match(/^(\d+\/\d+|\d+(?:[.,]\d+)?)\s*(kg|g|ml|un|und|unid\w*|fatias?)?\s+(.*)$/i);
-  if(m){let q=num(m[1]),u=(m[2]||'un').toLowerCase();if(u==='kg'){q*=1000;u='g'}if(u==='ml')u='g';const g=u==='g'?q:0;return{name:m[3].trim(),g,n:g?0:q,cat:cat(m[3])}}
-  return prev?{name:p.trim(),g:prev.g,n:prev.n,cat:cat(p)}:null;
+  if(m){let q=num(m[1]),u=(m[2]||'un').toLowerCase();if(u==='kg'){q*=1000;u='g'}const g=u==='g'?q:0,ml=u==='ml'?q:0;return{name:m[3].trim(),g,ml,n:g||ml?0:q,cat:cat(m[3])}}
+  return prev?{name:p.trim(),g:prev.g,ml:prev.ml||0,n:prev.n,cat:cat(p)}:null;
 }
 function parsePlan(t){
   const ms=[];let m,o;
@@ -153,47 +198,81 @@ function parsePlan(t){
   }
   return ms;
 }
-const price=it=>S.prices[it.name]??(it.mode==='n'?(it.cat==='ovo'?1:/p[aã]o/i.test(it.name)?.6:1.5):(DEFP.find(d=>d[0].test(it.name))||[0,CATS[it.cat].p])[1]);
 const sector=it=>it.cat==='supl'?'Suplementos':it.cat==='prot'?'Açougue':it.cat==='ovo'||/queijo|mussarela|iogurte|leite/i.test(it.name)?'Laticínios e ovos':/p[aã]o/i.test(it.name)?'Padaria':it.cat==='tub'||/banana|ma[cç][aã]|pera|manga|mam[aã]o|abacaxi|tangerina|laranja|lim[aã]o|kiwi|cenoura|beterraba|vagem|br[oó]colis|couve|chuchu|abobrinha|tomate|pepino/i.test(it.name)?'Hortifrúti':'Mercearia';
-const raw=a=>a.g?a.g/CATS[a.cat].f:a.n;
-const cst=a=>price({name:a.name,cat:a.cat,mode:a.g?'g':'n'})*(a.g?raw(a)/1000:a.n);
 function plan(){
-  const days=S.days,items={},out=[];let N=0;
-  P.forEach((m,mi)=>{
-    if(S.moff[mi])return;
-    const isM=/almo|jantar/i.test(m.name),os=m.opts.map((o,oi)=>[o,oi]).filter(x=>!S.off[mi+'.'+x[1]]);
-    if(!os.length)return;if(isM)N+=days;
-    const cm={};
-    for(let d=0;d<days;d++){
-      const[o,oi]=os[d%os.length],nm=[];
-      o.comps.forEach((c,ci)=>{
-        const al=c.alts.filter((a,ai)=>!S.off[`${mi}.${oi}.${ci}.${ai}`]);if(!al.length)return;
-        const a=S.mode==='eco'?al.reduce((x,y)=>cst(y)<cst(x)?y:x):al[Math.min(al.length-1,Math.floor(d/Math.ceil(days/al.length)))];
-        nm.push(a.name);
-        const k=a.cat==='ovo'?'ovo':a.name.toLowerCase()+(a.g?'g':'n'),it=items[k]=items[k]||{name:a.cat==='ovo'?'Ovo de galinha':a.name,cat:a.cat,mode:a.g?'g':'n',q:0,c:0,m:0},r=raw(a);
-        it.q+=r;it.c+=a.g||a.n;if(isM&&a.cat!=='supl')it.m+=r;
-      });
-      const key=(o.name?o.name+': ':'')+nm.join(' + ');cm[key]=(cm[key]||0)+1;
-    }
-    out.push({m,isM,list:Object.entries(cm)});
-  });
-  const lines=Object.values(items).map(it=>{
-    const st=it.mode==='n'?(it.cat==='ovo'?12:1):CATS[it.cat].s,buy=Math.ceil(it.q/st-1e-9)*st,p=price(it);
-    return{...it,buy,p,cost:it.mode==='n'?buy*p:buy/1000*p,sec:sector(it)};
-  });
-  const total=lines.reduce((a,l)=>a+l.cost,0),marm=lines.reduce((a,l)=>a+l.cost*l.m/l.q,0);
-  return{N,out,lines,total,marm};
+  const key=quoteKeyForState();
+  const quote=liveQuoteKey===key
+    ?{...liveQuote,offline:!navigator.onLine}
+    :offlineSnapshotKey===key
+      ?offlineSnapshot
+      :calculateCommercialQuote(P,S,catalogSnapshot||{foods:[],aliases:[],config:null,pricesProtected:true,unavailable:true});
+  const lines=quote.lines.map(line=>({...line,cat:line.category,mode:line.baseUnit==='unit'?'n':line.baseUnit,q:line.rawAmount,c:line.prescribedAmount,buy:line.purchaseAmount,p:line.unitPrice,cost:line.cost,sec:sector({name:line.name,cat:line.category})}));
+  const out=quote.meals.map(meal=>({m:meal,isM:meal.isMarmita,list:meal.selections}));
+  return{N:quote.marmitaCount,out,lines,total:quote.foodCost??quote.knownFoodCost,marm:quote.productionCost,quote};
 }
-const fq=(l,v)=>l.mode==='n'?Math.ceil(v-1e-9)+' un':kg(v);
-const esc=s=>s.replace(/"/g,'&quot;');
+const esc=s=>String(s??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+function reportError(error){screenError=error instanceof Error?error.message:String(error);view()}
+function quoteFromSnapshot(snapshot){
+  return{...snapshot,meals:snapshot.selectedMeals,offline:true,syncedAt:snapshot.syncedAt||snapshot.createdAt};
+}
+function loadOfflineQuote(key){
+  if(offlineLookupKey===key||offlineSnapshotKey===key)return;
+  offlineLookupKey=key;
+  getCachedQuoteSnapshot(key).then(snapshot=>{
+    if(key!==quoteKeyForState()||navigator.onLine)return;
+    if(snapshot){offlineSnapshot=quoteFromSnapshot(snapshot);offlineSnapshotKey=key;view()}
+  }).catch(reportError).finally(()=>{if(offlineLookupKey===key)offlineLookupKey=''});
+}
+function ensureOnlineQuote(){
+  const key=quoteKeyForState();
+  if(tab!==3)return;
+  if(!navigator.onLine){loadOfflineQuote(key);return}
+  if(!supabaseConfigured||liveQuoteKey===key||quoteRequestInFlight===key||quoteErrorKey===key)return;
+  quoteRequestInFlight=key;
+  requestCommercialQuote(P,S).then(quote=>{
+    if(key!==quoteKeyForState())return;
+    liveQuote=quote;liveQuoteKey=key;quoteErrorKey='';screenError='';view();
+  }).catch(error=>{
+    if(key===quoteKeyForState()){quoteErrorKey=key;reportError(error)}
+  }).finally(()=>{if(quoteRequestInFlight===key)quoteRequestInFlight=''});
+}
+function renderAdmin(){
+  if(!supabaseConfigured)return '<h2>Área administrativa</h2><p class="warn">Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY para conectar ao catálogo.</p>';
+  if(!adminSession)return `<h2>Área administrativa</h2><p class="h">Entre com a conta de administrador do Supabase.</p><form class="card admin-form" onsubmit="event.preventDefault();adminLogin()"><label>E-mail<input id="admin-email" type="email" autocomplete="username" required></label><label>Senha<input id="admin-password" type="password" autocomplete="current-password" required></label><button class="p" type="submit">Entrar</button></form>`;
+  const config=adminData?.config||catalogSnapshot?.config||{};
+  const foods=adminData?.foods||[];
+  const aliases=adminData?.aliases||[];
+  const editing=foods.find(food=>food.id===adminFoodEdit)||newFoodDraft||{};
+  const statusLabels={approved:'Aprovado',pending:'Pendente',rejected:'Rejeitado'};
+  const categories=[['prot','Proteína'],['arroz','Arroz'],['feijao','Feijão'],['tub','Tubérculo/legume'],['mac','Macarrão'],['ovo','Ovo'],['supl','Suplemento'],['out','Outros']];
+  return `<div class="plan-heading"><h2>Área administrativa</h2><button class="s" onclick="adminLogout()">Sair</button></div>
+    <form class="card admin-form" onsubmit="event.preventDefault();saveConfigFromForm()"><h3>Configurações comerciais</h3>
+    <label>Nome do negócio<input id="cfg-business-name" value="${esc(config.business_name||'NutriFlow')}" required></label>
+    <div class="row"><label>Moeda<input id="cfg-currency" value="${esc(config.currency||'BRL')}" maxlength="3" required></label><label>Markup (%)<input id="cfg-markup" type="number" min="0" step="0.01" value="${esc(config.markup_percent??0)}" required></label></div>
+    <div class="row"><label>Taxa do app (%)<input id="cfg-fee" type="number" min="0" step="0.01" value="${esc(config.app_fee_percent??0)}" required></label><label>Embalagem por marmita<input id="cfg-packaging" type="number" min="0" step="0.01" value="${esc(config.packaging_cost_per_meal??0)}" required></label></div>
+    <div class="row"><label>Confecção por marmita<input id="cfg-labor" type="number" min="0" step="0.01" value="${esc(config.labor_cost_per_meal??0)}" required></label><label>Overhead por marmita<input id="cfg-overhead" type="number" min="0" step="0.01" value="${esc(config.overhead_cost_per_meal??0)}" required></label></div>
+    <label><input id="cfg-show-prices" type="checkbox" ${config.show_food_prices?'checked':''}> Exibir preço unitário dos alimentos ao cliente</label><button class="p" type="submit">Salvar configurações</button></form>
+    <section class="card"><h3>${adminFoodEdit?'Editar alimento':'Catálogo de alimentos'}</h3><form class="admin-form" onsubmit="event.preventDefault();saveFoodFromForm()">
+    <label>Nome do alimento<input id="food-name" value="${esc(editing.canonical_name||'')}" required></label>
+    <div class="row"><label>Categoria<select id="food-category">${categories.map(([value,label])=>`<option value="${value}" ${editing.category===value?'selected':''}>${label}</option>`).join('')}</select></label><label>Unidade base<select id="food-unit">${[['g','Gramas'],['ml','Mililitros'],['unit','Unidade']].map(([value,label])=>`<option value="${value}" ${editing.base_unit===value?'selected':''}>${label}</option>`).join('')}</select></label></div>
+    <div class="row"><label>Unidade de compra<input id="food-purchase-unit" value="${esc(editing.purchase_unit_label||'kg')}" required></label><label>Incremento por embalagem<input id="food-increment" type="number" min="0.0001" step="any" value="${esc(editing.purchase_increment??1000)}" required></label></div>
+    <div class="row"><label>Preço por unidade de compra<input id="food-price" type="number" min="0" step="0.0001" value="${esc(editing.price_per_purchase_unit??'')}"></label><label>Fator de cocção<input id="food-factor" type="number" min="0.0001" step="any" value="${esc(editing.cooking_factor??1)}" required></label></div>
+    <label>Status<select id="food-status">${[['pending','Pendente'],['approved','Aprovado'],['rejected','Rejeitado']].map(([value,label])=>`<option value="${value}" ${editing.approval_status===value?'selected':''}>${label}</option>`).join('')}</select></label>
+    <div class="admin-actions"><button class="p" type="submit">${adminFoodEdit?'Salvar alimento':'Cadastrar alimento'}</button>${adminFoodEdit?'<button class="s" type="button" onclick="cancelFoodEdit()">Cancelar edição</button>':''}</div></form>
+    <div>${foods.map(food=>`<div class="admin-food"><div><b>${esc(food.canonical_name)}</b><small>${esc(statusLabels[food.approval_status]||food.approval_status)} · ${fmtMoney(Number(food.price_per_purchase_unit||0))}/${esc(food.purchase_unit_label)} · fator ${esc(food.cooking_factor)}</small></div><div class="admin-actions"><button class="s" onclick="editAdminFood('${esc(food.id)}')">Editar</button>${food.approval_status!=='approved'?`<button class="s" onclick="setFoodStatus('${esc(food.id)}','approved')">Aprovar</button>`:''}${food.approval_status!=='rejected'?`<button class="s" onclick="setFoodStatus('${esc(food.id)}','rejected')">Rejeitar</button>`:''}<button class="s" onclick="deleteFood('${esc(food.id)}')">Excluir</button></div></div>`).join('')||'<p class="net">Nenhum alimento cadastrado.</p>'}</div></section>
+    <section class="card"><h3>Sinônimos</h3><form class="admin-form" onsubmit="event.preventDefault();saveAliasFromForm()"><label>Alimento principal<select id="alias-food">${foods.map(food=>`<option value="${esc(food.id)}">${esc(food.canonical_name)}</option>`).join('')}</select></label><label>Nome alternativo<input id="alias-name" required></label><button class="p" type="submit">Adicionar sinônimo</button></form>${aliases.map(alias=>`<div class="admin-food"><div>${esc(alias.alias)}<small>${esc(foods.find(food=>food.id===alias.food_id)?.canonical_name||'Alimento')}</small></div><button class="s" onclick="deleteAlias('${esc(alias.id)}')">Remover</button></div>`).join('')}</section>
+    <section class="card"><h3>Solicitações para validação</h3>${adminRequests.map(request=>`<div class="admin-food"><div>${esc(request.food_name)}<small>${formatQuantity(request.requested_quantity,request.base_unit)} · ${new Date(request.created_at).toLocaleString('pt-BR')}</small></div><button class="s" data-request-id="${esc(request.id)}" onclick="startRemoteFoodRequest(this.dataset.requestId)">${request.resolved_food_id?'Revisar cadastro':'Cadastrar'}</button></div>`).join('')||'<p class="net">Nenhuma solicitação recebida do servidor.</p>'}${adminPending.map(food=>`<div class="admin-food"><div>${esc(food.name)}<small>Dispositivo local · ${formatQuantity(food.rawAmount,food.baseUnit)} · ${new Date(food.createdAt).toLocaleString('pt-BR')}</small></div><button class="s" data-pending-name="${esc(food.normalizedName)}" onclick="startPendingFood(this.dataset.pendingName)">${food.foodId?'Revisar catálogo':'Cadastrar'}</button></div>`).join('')}</section>
+    <section class="card"><h3>Orçamentos recentes neste dispositivo</h3>${quoteHistory.slice(0,5).map(quote=>`<div class="admin-food"><div>${esc(quote.customerName||'Sem nome')}<small>${new Date(quote.createdAt).toLocaleString('pt-BR')} · ${quote.finalPrice==null?'provisório':fmtMoney(quote.finalPrice)}</small></div></div>`).join('')||'<p class="net">Nenhum orçamento salvo.</p>'}</section>`;
+}
 function view(){
   const navIcons=[
     '<path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><path d="M9 3h6v4H9zM9 12h6m-6 4h6"/>',
     '<path d="M8 2v4m8-4v4M3 10h18"/><rect x="3" y="4" width="18" height="18" rx="2"/>',
     '<path d="M4 9h16v11H4zM3 9h18M8 9V6h8v3m-8 5h8m-8 3h5"/>',
-    '<path d="M6 7h12l1 14H5L6 7Z"/><path d="M9 7a3 3 0 0 1 6 0"/>'
+    '<path d="M6 7h12l1 14H5L6 7Z"/><path d="M9 7a3 3 0 0 1 6 0"/>',
+    '<circle cx="12" cy="8" r="3"/><path d="M5 20a7 7 0 0 1 14 0"/>'
   ];
-  $('#nav').innerHTML=['Plano','Ciclo','Marmitas','Compras'].map((t,i)=>`<button aria-current="${tab===i}" onclick="go(${i})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${navIcons[i]}</svg><span>${t}</span></button>`).join('');
+  $('#nav').innerHTML=['Plano','Ciclo','Marmitas','Compras','Admin'].map((t,i)=>`<button aria-current="${tab===i}" onclick="go(${i})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${navIcons[i]}</svg><span>${t}</span></button>`).join('');
   const d=document.documentElement;
   const dark=d.dataset.theme==='dark'||(!d.dataset.theme&&matchMedia('(prefers-color-scheme:dark)').matches);
   $('#th').innerHTML=themeIcon(dark);
@@ -202,39 +281,204 @@ function view(){
   if(tab===0){
     const activeMeals=P.filter((_,mi)=>!S.moff[mi]).length;
     m.innerHTML=`<div class="plan-heading"><h2>Plano alimentar</h2><span class="plan-count">${activeMeals} de ${P.length} refeições</span></div><p class="plan-description">Toque nos alimentos para incluir ou remover do ciclo. As opções riscadas ficam fora do planejamento.</p>
-    <details><summary>Editar plano em texto</summary><textarea id="tx" aria-label="Plano em texto">${S.text.replace(/</g,'&lt;')}</textarea>
+    <details><summary>Editar plano em texto</summary><textarea id="tx" aria-label="Plano em texto">${esc(S.text)}</textarea>
     <p class="net"># Refeição | hora · ## Opção · um componente por linha · alternativas separadas por “ou” (sem quantidade, repete a anterior).</p>
     <div class="row"><button class="p" onclick="doParse()">Ler plano</button><button class="s" onclick="doParse(DEF)">Restaurar exemplo</button></div></details>
-    <div class="plan-meals">${P.map((x,mi)=>`<section class="card plan-meal"><div class="mh plan-meal-head"><label class="plan-meal-toggle"><input type="checkbox" ${S.moff[mi]?'':'checked'} onchange="tg('moff','${mi}')"> <span class="plan-meal-name">${x.name}</span></label><span class="plan-time">${x.time}</span></div>
-    ${x.opts.map((o,oi)=>`${o.name?`<label class="oh"><input type="checkbox" ${S.off[mi+'.'+oi]?'':'checked'} onchange="tg('off','${mi}.${oi}')"> ${o.name}</label>`:''}
-    ${o.comps.map((c,ci)=>`<div class="chips">${c.alts.map((a,ai)=>{const k=`${mi}.${oi}.${ci}.${ai}`;return `<button class="chip" aria-pressed="${!S.off[k]}" onclick="tg('off','${k}')">${a.name} · ${a.g?a.g+' g':a.n+' un'}</button>`}).join('')}</div>`).join('')}`).join('')}</section>`).join('')}</div>`;
+    <div class="plan-meals">${P.map((x,mi)=>`<section class="card plan-meal"><div class="mh plan-meal-head"><label class="plan-meal-toggle"><input type="checkbox" ${S.moff[mi]?'':'checked'} onchange="tg('moff','${mi}')"> <span class="plan-meal-name">${esc(x.name)}</span></label><span class="plan-time">${esc(x.time)}</span></div>
+    ${x.opts.map((o,oi)=>`${o.name?`<label class="oh"><input type="checkbox" ${S.off[mi+'.'+oi]?'':'checked'} onchange="tg('off','${mi}.${oi}')"> ${esc(o.name)}</label>`:''}
+    ${o.comps.map((c,ci)=>`<div class="chips">${c.alts.map((a,ai)=>{const k=`${mi}.${oi}.${ci}.${ai}`,amount=a.g?formatQuantity(a.g,'g'):a.ml?formatQuantity(a.ml,'ml'):formatQuantity(a.n,'un');return `<button class="chip" aria-pressed="${!S.off[k]}" onclick="tg('off','${k}')">${esc(a.name)} · ${amount}</button>`}).join('')}</div>`).join('')}`).join('')}</section>`).join('')}</div>`;
   }
   if(tab===1){
-    m.innerHTML=`<h2>Ciclo e orçamento</h2><p class="h">Quantos dias de marmitas você vai cozinhar.</p>
+    m.innerHTML=`<h2>Ciclo</h2><p class="h">Quantos dias de marmitas você vai cozinhar.</p>
     <div class="seg" role="group" aria-label="Dias">${[7,14,21,28].map(n=>`<button aria-pressed="${S.days===n}" onclick="S.days=${n};save();view()">${n} dias</button>`).join('')}</div>
-    <div class="card" style="margin-top:12px"><label>Orçamento do ciclo (R$, opcional)<input type="number" inputmode="decimal" value="${S.budget||''}" onchange="S.budget=+this.value;save()"></label></div>
-    <div class="seg" style="grid-template-columns:1fr 1fr" role="group" aria-label="Preferência"><button aria-pressed="${S.mode==='eco'}" onclick="S.mode='eco';save();view()">Economizar</button><button aria-pressed="${S.mode==='var'}" onclick="S.mode='var';save();view()">Variar mais</button></div>`;
+    <div class="seg" style="grid-template-columns:1fr 1fr" role="group" aria-label="Preferência"><button aria-pressed="${S.mode==='eco'}" onclick="S.mode='eco';save();view()">Economizar</button><button aria-pressed="${S.mode!=='eco'}" onclick="S.mode='var';save();view()">Variar mais</button></div>
+    <div class="card" style="margin-top:12px"><label>Nome do cliente (opcional)<input value="${esc(S.customerName)}" onchange="setCustomerName(this.value)" autocomplete="name"></label></div>`;
   }
   if(tab===2){
-    const p=plan();
-    m.innerHTML=!p.out.length?'<div class="empty">Marque refeições na aba Plano.</div>':`<h2>Cardápio do ciclo</h2><p class="h">${p.N} marmitas (almoço + jantar) em ${S.days} dias</p>${p.out.map(o=>`<div class="sec">${o.m.name} ${o.m.time}${o.isM?' · marmitas':''}</div>${o.list.map(([k,n])=>`<div class="card"><span class="big">${n}×</span> ${k}</div>`).join('')}`).join('')}`;
+    const quote=plan().quote;
+    m.innerHTML=!quote.meals.length?'<div class="empty">Marque refeições na aba Plano.</div>':`<h2>Cardápio do ciclo</h2><p class="h">${quote.marmitaCount} marmitas em ${S.days} dias</p>${quote.meals.map(meal=>`<div class="sec">${esc(meal.name)} ${esc(meal.time)}${meal.isMarmita?' · marmitas':''}</div>${meal.selections.map(([selection,count])=>`<div class="card"><span class="big">${count}×</span> ${esc(selection)}</div>`).join('')}`).join('')}`;
   }
   if(tab===3){
-    const p=plan(),secs={};p.lines.forEach(l=>(secs[l.sec]=secs[l.sec]||[]).push(l));
-    const bud=S.budget?(p.total<=S.budget?'<span class="good">dentro do orçamento</span>':`<span class="warn">${fmt(p.total-S.budget)} acima do orçamento</span>`):'';
-    m.innerHTML=!p.lines.length?'<div class="empty">Marque refeições na aba Plano.</div>':`<h2>Lista de compras</h2><div class="card kpi"><div><small>Ciclo</small><b>${fmt(p.total)}</b></div><div><small>Por dia</small><b>${fmt(p.total/S.days)}</b></div><div><small>Por marmita</small><b>${fmt(p.N?p.marm/p.N:0)}</b></div></div><p class="h">${bud}</p>
-    ${Object.keys(secs).sort().map(s=>`<div class="sec">${s}</div>${secs[s].map(l=>`<div class="ln"><div>${l.name}<small>${l.cat==='out'||l.cat==='supl'||l.cat==='ovo'?'Necessário '+fq(l,l.q):'Prescrito '+kg(l.c)+' → cru '+kg(l.q)}</small></div><div><b>${fq(l,l.buy)}</b><small>${fmt(l.cost)}</small><input class="pi" type="number" inputmode="decimal" step="0.1" min="0" value="${+l.p.toFixed(2)}" data-n="${esc(l.name)}" onchange="pr(this.dataset.n,this.value)" aria-label="Preço de ${esc(l.name)} (${l.mode==='n'?'por unidade':'por kg'})"></div></div>`).join('')}`).join('')}<p class="net">Preços em R$/kg (ou R$/un nos itens em unidade): valores iniciais são estimativas, edite à direita.</p>`;
+    const quote=plan().quote,sections={};
+    quote.lines.forEach(line=>(sections[sector({name:line.name,cat:line.category})]=sections[sector({name:line.name,cat:line.category})]||[]).push(line));
+    const pending=quote.pendingFoods.length?`<p class="warn quote-status" role="status">Orçamento provisório: ${quote.pendingFoods.length} alimento(s) precisam de validação do administrador.</p>`:'';
+    const errors=quote.configError?`<p class="warn" role="alert">${esc(quote.configError)}</p>`:'';
+    const breakdown=quote.configError
+      ?'<p class="quote-status">Um novo orçamento precisa de conexão para calcular valores. Quantidades continuam disponíveis.</p>'
+      :`<div class="card quote-breakdown"><div><span>Custo dos alimentos${quote.foodCost==null?' (parcial conhecido)':''}</span><b>${fmtMoney(quote.knownFoodCost,quote.currency)}</b></div><div><span>Confecção</span><b>${fmtMoney(quote.productionCost,quote.currency)}</b></div><div><span>Markup</span><b>${quote.markupAmount==null?'A confirmar':fmtMoney(quote.markupAmount,quote.currency)}</b></div><div><span>Taxa do app</span><b>${quote.appFeeAmount==null?'A confirmar':fmtMoney(quote.appFeeAmount,quote.currency)}</b></div><div><span>Entrega</span><b>A combinar</b></div></div>`;
+    m.innerHTML=!quote.lines.length?`<h2>Compras e orçamento</h2>${errors}<div class="empty">Marque refeições na aba Plano ou sincronize o catálogo.</div>`:`<h2>Compras e orçamento</h2>${errors}${pending}<div class="card kpi"><div><small>Orçamento do ciclo</small><b>${quote.finalPrice==null?'A confirmar':fmtMoney(quote.finalPrice,quote.currency)}</b></div><div><small>Por marmita</small><b>${quote.unitPrice==null?'A confirmar':fmtMoney(quote.unitPrice,quote.currency)}</b></div><div><small>Itens</small><b>${quote.lines.length}</b></div></div>${breakdown}<p class="quote-status">${quote.offline&&quote.syncedAt?`Orçamento gerado offline em ${new Date(quote.syncedAt).toLocaleString('pt-BR')} — sujeito à confirmação de disponibilidade.`:quote.status==='ready'?'Orçamento calculado com o catálogo aprovado.':'Os valores dependem da validação do catálogo.'}</p>
+    ${Object.keys(sections).sort().map(section=>`<div class="sec">${esc(section)}</div>${sections[section].map(line=>`<div class="ln"><div>${esc(line.name)}<small>${line.unitMismatch?'Unidade incompatível com o catálogo':line.pending?'Aguardando aprovação ou preço do administrador':line.pricingUnavailable?'Preço protegido; conecte ao servidor para calcular':line.category==='out'||line.category==='supl'||line.category==='ovo'?'Necessário '+formatQuantity(line.rawAmount,line.baseUnit):'Prescrito '+formatQuantity(line.prescribedAmount,line.baseUnit)+' → cru '+formatQuantity(line.rawAmount,line.baseUnit)}</small>${line.pending?'<small class="quote-pending">Pendente de validação</small>':''}</div><div><b>${line.purchaseAmount==null?'A confirmar':formatQuantity(line.purchaseAmount,line.unitLabel)}</b>${line.showUnitPrice&&line.unitPrice!=null?`<small>${fmtMoney(line.unitPrice)}/${esc(line.unitLabel)}</small>`:''}${line.showUnitPrice&&line.purchaseCost!=null?`<small>Compra: ${fmtMoney(line.purchaseCost)}</small>`:''}</div></div>`).join('')}`).join('')}
+    ${quote.lines.length&&quote.marmitaCount?`<button class="p" onclick="createAndShareQuote()">${quote.status==='ready'?'Salvar orçamento e preparar WhatsApp':quote.pendingFoods.length?'Salvar solicitação para validação':'Salvar orçamento provisório'}</button>`:''}${lastQuoteLink?`<p><a class="s" href="${lastQuoteLink}" target="_blank" rel="noopener">Abrir orçamento no WhatsApp</a></p>`:''}${quote.offline&&quote.syncedAt?`<p class="net">Catálogo sincronizado em ${new Date(quote.syncedAt).toLocaleString('pt-BR')}.</p>`:''}`;
   }
+  if(tab===4)m.innerHTML=renderAdmin();
+  if(screenError)m.insertAdjacentHTML('afterbegin',`<p class="sync-error" role="alert">${esc(screenError)}</p>`);
+  if(planError)m.insertAdjacentHTML('afterbegin',`<p class="warn" role="alert">${esc(planError)}</p>`);
+  ensureOnlineQuote();
 }
-function go(i){tab=i;save();view();$('#m').scrollTop=0}
-function doParse(t){S.text=t||$('#tx').value;S.off={};S.moff={};P=parsePlan(S.text);save();view()}
+function go(i){tab=Math.min(4,Math.max(0,Number(i)||0));screenError='';save();view();$('#m').scrollTop=0}
+function doParse(t){
+  const text=t??$('#tx')?.value??S.text;
+  try{P=parsePlan(text);S.text=text;S.off={};S.moff={};planError='';save();view()}
+  catch(error){planError=error instanceof Error?error.message:String(error);view()}
+}
 function tg(o,k){S[o][k]=!S[o][k];save();view()}
-function pr(n,v){S.prices[n]=+v||0;save();view()}
+function setCustomerName(value){S.customerName=value;save()}
+async function syncCatalog(){
+  if(isSyncing)return;
+  isSyncing=true;screenError='';quoteErrorKey='';net();view();
+  try{
+    catalogSnapshot=await synchronizeCatalog();
+    liveQuote=null;liveQuoteKey='';quoteErrorKey='';
+    await flushLocalFoodRequests();
+    if(adminSession)await refreshAdmin();
+  }
+  catch(error){reportError(error)}
+  finally{isSyncing=false;net();view()}
+}
+async function flushLocalFoodRequests(){
+  const pending=await getPendingFoods();
+  if(!pending.length)return;
+  await submitFoodValidationRequests(pending);
+  for(const food of pending)await deletePendingFood(food.normalizedName);
+}
+async function refreshAdmin(){
+  const [data,pending,quotes]=await Promise.all([loadAdminData(),getPendingFoods(),getQuoteSnapshots()]);
+  adminData=data;adminPending=pending;adminRequests=data.requests;quoteHistory=quotes;
+}
+async function openAdmin(){
+  tab=4;screenError='';save();view();
+  try{adminSession=await getAdminSession();if(adminSession)await refreshAdmin();view()}
+  catch(error){reportError(error)}
+}
+async function adminLogin(){
+  screenError='';
+  try{adminSession=await signInAdmin($('#admin-email').value.trim(),$('#admin-password').value);await refreshAdmin();view()}
+  catch(error){reportError(error)}
+}
+async function adminLogout(){
+  try{await signOutAdmin();adminSession=null;adminData=null;adminFoodEdit=null;newFoodDraft=null;screenError='';view()}
+  catch(error){reportError(error)}
+}
+async function saveConfigFromForm(){
+  const config=adminData?.config;
+  if(!config?.id){reportError(new Error('A configuração comercial ativa não foi encontrada.'));return}
+  try{
+    await saveAdminConfig({id:config.id,business_name:$('#cfg-business-name').value,currency:$('#cfg-currency').value,show_food_prices:$('#cfg-show-prices').checked,packaging_cost_per_meal:$('#cfg-packaging').value,labor_cost_per_meal:$('#cfg-labor').value,overhead_cost_per_meal:$('#cfg-overhead').value,markup_percent:$('#cfg-markup').value,app_fee_percent:$('#cfg-fee').value});
+    await refreshAdmin();catalogSnapshot=await synchronizeCatalog();liveQuote=null;liveQuoteKey='';screenError='';view();
+  }catch(error){reportError(error)}
+}
+function foodFormValues(status=$('#food-status').value){
+  return{id:adminFoodEdit||undefined,canonical_name:$('#food-name').value,category:$('#food-category').value,base_unit:$('#food-unit').value,purchase_unit_label:$('#food-purchase-unit').value,purchase_increment:$('#food-increment').value,price_per_purchase_unit:$('#food-price').value,cooking_factor:$('#food-factor').value,approval_status:status};
+}
+async function saveFoodFromForm(){
+  const food=foodFormValues();
+  if(food.approval_status==='approved'&&!hasPrice(food.price_per_purchase_unit)){reportError(new Error('Informe um preço válido antes de aprovar o alimento.'));return}
+  try{
+    const pendingName=newFoodDraft?.normalizedName;
+    const requestId=newFoodDraft?.requestId;
+    const savedFood=await saveAdminFood(food);
+    if(requestId)await resolveFoodValidationRequest(requestId,food.approval_status,savedFood.id);
+    if(pendingName)await deletePendingFood(pendingName);
+    adminFoodEdit=null;newFoodDraft=null;await refreshAdmin();catalogSnapshot=await synchronizeCatalog();liveQuote=null;liveQuoteKey='';screenError='';view();
+  }catch(error){reportError(error)}
+}
+function editAdminFood(id){adminFoodEdit=id;newFoodDraft=null;screenError='';view()}
+function cancelFoodEdit(){adminFoodEdit=null;newFoodDraft=null;view()}
+async function setFoodStatus(id,status){
+  const food=adminData?.foods.find(item=>item.id===id);
+  if(!food)return;
+  if(status==='approved'&&!hasPrice(food.price_per_purchase_unit)){reportError(new Error('Edite o alimento e informe um preço válido antes de aprová-lo.'));return}
+  try{
+    await saveAdminFood({...food,approval_status:status});
+    const request=adminRequests.find(item=>item.resolved_food_id===id);
+    if(request)await resolveFoodValidationRequest(request.id,status,id);
+    await refreshAdmin();catalogSnapshot=await synchronizeCatalog();liveQuote=null;liveQuoteKey='';screenError='';view();
+  }
+  catch(error){reportError(error)}
+}
+async function deleteFood(id){
+  if(!confirm('Excluir este alimento e seus sinônimos?'))return;
+  try{await deleteAdminFood(id);await refreshAdmin();catalogSnapshot=await synchronizeCatalog();liveQuote=null;liveQuoteKey='';adminFoodEdit=null;screenError='';view()}
+  catch(error){reportError(error)}
+}
+async function saveAliasFromForm(){
+  try{await saveAdminAlias({foodId:$('#alias-food').value,alias:$('#alias-name').value});await refreshAdmin();catalogSnapshot=await synchronizeCatalog();liveQuote=null;liveQuoteKey='';screenError='';view()}
+  catch(error){reportError(error)}
+}
+async function deleteAlias(id){
+  try{await deleteAdminAlias(id);await refreshAdmin();catalogSnapshot=await synchronizeCatalog();liveQuote=null;liveQuoteKey='';screenError='';view()}
+  catch(error){reportError(error)}
+}
+function startPendingFood(normalizedName){
+  const pending=adminPending.find(item=>item.normalizedName===normalizedName);
+  if(!pending)return;
+  if(pending.foodId&&adminData?.foods.some(food=>food.id===pending.foodId)){
+    adminFoodEdit=pending.foodId;newFoodDraft=null;view();return;
+  }
+  adminFoodEdit=null;
+  newFoodDraft={normalizedName,canonical_name:pending.name,category:pending.category,base_unit:pending.baseUnit,purchase_unit_label:pending.baseUnit==='g'?'kg':pending.baseUnit==='ml'?'l':'un',purchase_increment:pending.baseUnit==='unit'?1:1000,price_per_purchase_unit:'',cooking_factor:pending.category==='prot'?.75:pending.category==='arroz'?2.5:pending.category==='feijao'?2.8:pending.category==='mac'?2.2:1,approval_status:'pending'};
+  view();
+}
+function startRemoteFoodRequest(requestId){
+  const request=adminRequests.find(item=>item.id===requestId);
+  if(!request)return;
+  const existing=adminData?.foods.find(food=>food.id===request.resolved_food_id);
+  if(existing){editAdminFood(existing.id);return}
+  adminFoodEdit=null;
+  newFoodDraft={
+    requestId:request.id,
+    canonical_name:request.food_name,
+    category:request.category,
+    base_unit:request.base_unit,
+    purchase_unit_label:request.base_unit==='g'?'kg':request.base_unit==='ml'?'l':'un',
+    purchase_increment:request.base_unit==='unit'?1:1000,
+    price_per_purchase_unit:'',
+    cooking_factor:request.category==='prot'?.75:request.category==='arroz'?2.5:request.category==='feijao'?2.8:request.category==='mac'?2.2:1,
+    approval_status:'pending',
+  };
+  view();
+}
+async function createAndShareQuote(){
+  try{
+    const quote=plan().quote,snapshot=createQuoteSnapshot(quote,S,S.customerName);
+    for(const pending of quote.pendingFoods)await savePendingFood({...pending,normalizedName:sanitizeFoodName(pending.name),createdAt:new Date().toISOString()});
+    await saveQuoteSnapshot(snapshot);lastQuoteLink=formatWhatsAppQuote(snapshot);screenError='';
+    if(navigator.onLine&&quote.pendingFoods.length){
+      try{
+        await submitFoodValidationRequests(quote.pendingFoods);
+        for(const pending of quote.pendingFoods)await deletePendingFood(sanitizeFoodName(pending.name));
+      }catch(error){screenError=error instanceof Error?error.message:String(error)}
+    }
+    if(adminSession)await refreshAdmin();
+    view();
+  }catch(error){reportError(error)}
+}
+Object.assign(window,{S,DEF,save,view,go,doParse,tg,setCustomerName,syncCatalog,openAdmin,adminLogin,adminLogout,saveConfigFromForm,saveFoodFromForm,editAdminFood,cancelFoodEdit,setFoodStatus,deleteFood,saveAliasFromForm,deleteAlias,startPendingFood,startRemoteFoodRequest,createAndShareQuote});
 $('#th').onclick=()=>{const d=document.documentElement,dark=d.dataset.theme==='dark'||(!d.dataset.theme&&matchMedia('(prefers-color-scheme:dark)').matches);d.dataset.theme=S.theme=dark?'light':'dark';save();view()};
+$('#sync').onclick=syncCatalog;
+$('#admin').onclick=openAdmin;
 if(S.theme)document.documentElement.dataset.theme=S.theme;
-P=parsePlan(S.text);
-const net=()=>$('#net').textContent=navigator.onLine?'':'offline';
-addEventListener('online',net);addEventListener('offline',net);net();
+try{P=parsePlan(S.text)}
+catch(error){
+  P=[];planError=error instanceof Error?error.message:String(error);
+}
+save();
+loadSavedCatalog().then(snapshot=>{catalogSnapshot=snapshot;net();view()}).catch(reportError);
+getAdminSession().then(async session=>{adminSession=session;if(session)await refreshAdmin();view()}).catch(reportError);
+function net(){
+  const indicator=$('#net');
+  if(!navigator.onLine){
+    indicator.textContent=catalogSnapshot?.syncedAt
+      ?`Offline · catálogo de ${new Date(catalogSnapshot.syncedAt).toLocaleString('pt-BR')} · confirme disponibilidade`
+      :'Offline · sincronize para consultar preços';
+    return;
+  }
+  indicator.textContent=isSyncing?'Sincronizando catálogo…':'';
+}
+addEventListener('online',()=>{net();screenError='';syncCatalog()});
+addEventListener('offline',()=>{screenError='';net();view()});
+net();
+if(navigator.onLine&&supabaseConfigured)syncCatalog();
 if('serviceWorker'in navigator)addEventListener('load',()=>navigator.serviceWorker.register('./sw.js'));
 view();
 </script>

@@ -1,0 +1,2 @@
+[functions.commercial-quote]
+verify_jwt = true

@@ -1,6 +1,6 @@
-const V = 'nutriflow-v6';
+const V = 'nutriflow-v10';
 const STATIC_CACHE = V;
-const OFFLINE_DB = 'nutriflow-offline';
+const OFFLINE_DB = 'nutriflow-http-offline';
 const OFFLINE_STORE = 'supabase-cache';
 
 const isSupabaseRequest = request => {
@@ -13,68 +13,36 @@ const isSupabaseRequest = request => {
   }
 };
 
-const openOfflineDb = () => new Promise((resolve, reject) => {
+const clearLegacySupabaseCache = () => new Promise((resolve, reject) => {
   const request = indexedDB.open(OFFLINE_DB, 1);
   request.onupgradeneeded = () => request.result.createObjectStore(OFFLINE_STORE, { keyPath: 'key' });
-  request.onsuccess = () => resolve(request.result);
   request.onerror = () => reject(request.error);
+  request.onsuccess = () => {
+    const db = request.result;
+    const tx = db.transaction(OFFLINE_STORE, 'readwrite');
+    tx.objectStore(OFFLINE_STORE).clear();
+    tx.oncomplete = () => {
+      db.close();
+      resolve();
+    };
+    tx.onerror = () => {
+      db.close();
+      reject(tx.error);
+    };
+    tx.onabort = () => {
+      db.close();
+      reject(tx.error);
+    };
+  };
 });
 
-const cacheKey = request => request.url;
-
-async function readOffline(request) {
+async function supabaseNetworkOnly(request) {
   try {
-    const db = await openOfflineDb();
-    const entry = await new Promise((resolve, reject) => {
-      const tx = db.transaction(OFFLINE_STORE, 'readonly');
-      const req = tx.objectStore(OFFLINE_STORE).get(cacheKey(request));
-      req.onsuccess = () => resolve(req.result || null);
-      req.onerror = () => reject(req.error);
-    });
-    if (!entry) return null;
-    return new Response(entry.body, {
-      status: entry.status || 200,
-      headers: entry.headers || { 'Content-Type': 'application/json' }
-    });
+    return await fetch(request, { cache: 'no-store' });
   } catch {
-    return null;
-  }
-}
-
-async function writeOffline(request, response) {
-  if (!response.ok) return;
-  try {
-    const body = await response.clone().text();
-    const headers = Object.fromEntries(response.headers.entries());
-    const db = await openOfflineDb();
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction(OFFLINE_STORE, 'readwrite');
-      tx.objectStore(OFFLINE_STORE).put({
-        key: cacheKey(request),
-        body,
-        status: response.status,
-        headers,
-        updatedAt: Date.now()
-      });
-      tx.oncomplete = resolve;
-      tx.onerror = () => reject(tx.error);
-    });
-  } catch {
-    // Offline persistence is best-effort; the network response remains valid.
-  }
-}
-
-async function supabaseNetworkFirst(request) {
-  try {
-    const response = await fetch(request, { cache: 'no-store' });
-    await writeOffline(request, response);
-    return response;
-  } catch {
-    const cached = await readOffline(request);
-    if (cached) return cached;
     return new Response(JSON.stringify({
       offline: true,
-      error: 'Supabase indisponível e nenhum dado local foi encontrado.'
+      error: 'Supabase indisponível. Use o catálogo seguro sincronizado neste dispositivo.'
     }), {
       status: 503,
       headers: { 'Content-Type': 'application/json' }
@@ -102,7 +70,7 @@ self.addEventListener('install', event => {
     const resources = [
       scope.href,
       index.href,
-      ...Array.from(html.matchAll(/<link\b[^>]*\bhref=["']([^"']+)["']/gi), m => new URL(m[1], index).href)
+      ...Array.from(html.matchAll(/<(?:link\b[^>]*\bhref|script\b[^>]*\bsrc)=["']([^"']+)["']/gi), m => new URL(m[1], index).href)
     ].filter(url => {
       const parsed = new URL(url);
       return parsed.origin === scope.origin && parsed.pathname.startsWith(scope.pathname);
@@ -116,6 +84,7 @@ self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
       .then(keys => Promise.all(keys.filter(key => key !== STATIC_CACHE).map(key => caches.delete(key))))
+      .then(clearLegacySupabaseCache)
       .then(() => self.clients.claim())
   );
 });
@@ -124,7 +93,7 @@ self.addEventListener('fetch', event => {
   const { request } = event;
   if (request.method !== 'GET' && request.method !== 'HEAD') return;
   if (isSupabaseRequest(request)) {
-    event.respondWith(supabaseNetworkFirst(request));
+    event.respondWith(supabaseNetworkOnly(request));
     return;
   }
   if (new URL(request.url).origin === self.location.origin) {
