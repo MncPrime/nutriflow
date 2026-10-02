@@ -25,7 +25,9 @@ VITE_SUPABASE_ANON_KEY=<publishable-or-anon-key>
 ```
 
 Crie `.env.local` para desenvolvimento local (o arquivo é ignorado pelo Git).
-No GitHub Actions, configure essas duas variáveis públicas no ambiente de build.
+No GitHub, cadastre ambas como **Repository variables** (`Settings → Secrets and
+variables → Actions → Variables`); o workflow injeta os valores apenas no passo
+de build e falha com uma mensagem explícita se estiverem ausentes.
 Nunca use `service_role` em `VITE_*`, no HTML, no JavaScript do navegador ou em
 variáveis públicas do GitHub Pages.
 
