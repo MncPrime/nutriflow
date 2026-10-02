@@ -1,6 +1,6 @@
-const V = 'nutriflow-v6';
+const V = 'nutriflow-v8';
 const STATIC_CACHE = V;
-const OFFLINE_DB = 'nutriflow-offline';
+const OFFLINE_DB = 'nutriflow-http-offline';
 const OFFLINE_STORE = 'supabase-cache';
 
 const isSupabaseRequest = request => {
@@ -102,7 +102,7 @@ self.addEventListener('install', event => {
     const resources = [
       scope.href,
       index.href,
-      ...Array.from(html.matchAll(/<link\b[^>]*\bhref=["']([^"']+)["']/gi), m => new URL(m[1], index).href)
+      ...Array.from(html.matchAll(/<(?:link\b[^>]*\bhref|script\b[^>]*\bsrc)=["']([^"']+)["']/gi), m => new URL(m[1], index).href)
     ].filter(url => {
       const parsed = new URL(url);
       return parsed.origin === scope.origin && parsed.pathname.startsWith(scope.pathname);
