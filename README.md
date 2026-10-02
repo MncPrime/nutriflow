@@ -63,9 +63,15 @@ repositório `SUPABASE_ACCESS_TOKEN` e execute manualmente o workflow
 workflow fica disponível para execução após ser integrado à branch padrão.
 
 Na atualização, a migration do IndexedDB remove preços individuais de
-catálogos e cotações antigas. O service worker v12 também limpa o cache HTTP
+catálogos e cotações antigas. O service worker v13 também limpa o cache HTTP
 antigo de respostas Supabase; somente o catálogo seguro e snapshots agregados
 continuam disponíveis offline.
+
+O leitor PDF.js é preparado enquanto há conexão e o service worker está ativo;
+assim, os arquivos locais do motor ficam no cache para extração de PDFs offline.
+O importador reconhece localmente o layout tabular deste modelo de plano e pede
+que se escolha entre as rotinas de horário identificadas antes da revisão. A
+extração continua sujeita à conferência e não envia o PDF a serviços externos.
 
 O parâmetro `show_food_prices` controla a visibilidade dos preços individuais e
 da decomposição interna (custos agregados de alimentos, confecção, markup e taxa).

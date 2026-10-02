@@ -7,6 +7,13 @@ e este projeto segue [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.1.1] - 2026-10-02
+
+### Fixed
+- Preparação conectada do motor PDF.js após ativação do service worker para permitir extração offline posterior.
+- Exibição de erro quando não é possível armazenar o leitor PDF para uso offline.
+- Atualização da versão do cache do service worker para invalidar recursos antigos.
+
 ## [1.1.0] - 2024 - Meal Insertion System & Versioning
 
 ### Added
