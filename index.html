@@ -107,6 +107,9 @@ import {
   saveAdminConfig,
   saveAdminFood,
   signInAdmin,
+  requestAdminPasswordReset,
+  updateAdminPassword,
+  subscribeToAdminPasswordRecovery,
   signOutAdmin,
   requestCommercialQuote,
   submitFoodValidationRequests,
@@ -168,7 +171,7 @@ const cat=n=>(KW.find(k=>k[1].test(n))||['out'])[0];
 import { sanitizeFoodName } from './src/utils/food-matching.js';
 let S;try{S=JSON.parse(localStorage.getItem('nf2')||'null')}catch(e){}
 S=Object.assign({text:DEF,days:14,mode:'var',budget:0,tab:0,theme:'',off:{},moff:{},prices:{},priceOverrides:{},customerName:''},S||{});
-let tab=Number.isInteger(S.tab)&&S.tab>=0&&S.tab<=4?S.tab:0,P,catalogSnapshot=null,adminSession=null,adminData=null,adminFoodEdit=null,newFoodDraft=null,screenError='',planError='',isSyncing=false,quoteHistory=[],adminPending=[],lastQuoteLink='',liveQuote=null,liveQuoteKey='',quoteRequestInFlight='',quoteErrorKey='',offlineSnapshot=null,offlineSnapshotKey='',offlineLookupKey='',adminRequests=[];
+let tab=Number.isInteger(S.tab)&&S.tab>=0&&S.tab<=4?S.tab:0,P,catalogSnapshot=null,adminSession=null,adminData=null,adminFoodEdit=null,newFoodDraft=null,adminAuthMode='login',adminAuthMessage='',screenError='',planError='',isSyncing=false,quoteHistory=[],adminPending=[],lastQuoteLink='',liveQuote=null,liveQuoteKey='',quoteRequestInFlight='',quoteErrorKey='',offlineSnapshot=null,offlineSnapshotKey='',offlineLookupKey='',adminRequests=[];
 S.tab=tab;
 function quoteKeyForState(state=S){return JSON.stringify({text:state.text,days:state.days,mode:state.mode,off:state.off,moff:state.moff})}
 let activeQuoteKey=quoteKeyForState();
@@ -238,7 +241,8 @@ function ensureOnlineQuote(){
 }
 function renderAdmin(){
   if(!supabaseConfigured)return '<h2>Área administrativa</h2><p class="warn">Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY para conectar ao catálogo.</p>';
-  if(!adminSession)return `<h2>Área administrativa</h2><p class="h">Entre com a conta de administrador do Supabase.</p><form class="card admin-form" onsubmit="event.preventDefault();adminLogin()"><label>E-mail<input id="admin-email" type="email" autocomplete="username" required></label><label>Senha<input id="admin-password" type="password" autocomplete="current-password" required></label><button class="p" type="submit">Entrar</button></form>`;
+  if(!adminSession&&adminAuthMode==='recovery')return `<h2>Redefinir senha</h2><p class="h">Escolha uma nova senha para sua conta de administrador.</p><form class="card admin-form" onsubmit="event.preventDefault();adminSaveRecoveryPassword()"><label>Nova senha<input id="admin-new-password" type="password" autocomplete="new-password" minlength="8" required></label><label>Confirme a nova senha<input id="admin-confirm-password" type="password" autocomplete="new-password" minlength="8" required></label><button class="p" type="submit">Salvar nova senha</button></form>`;
+  if(!adminSession)return `<h2>Área administrativa</h2><p class="h">Entre com a conta de administrador do Supabase.</p>${adminAuthMessage?`<p class="quote-status" role="status">${esc(adminAuthMessage)}</p>`:''}<form class="card admin-form" onsubmit="event.preventDefault();adminLogin()"><label>E-mail<input id="admin-email" type="email" autocomplete="username" required></label><label>Senha<input id="admin-password" type="password" autocomplete="current-password" required></label><button class="p" type="submit">Entrar</button><button class="s" type="button" onclick="adminSendPasswordReset()">Esqueci minha senha</button></form>`;
   const config=adminData?.config||catalogSnapshot?.config||{};
   const foods=adminData?.foods||[];
   const aliases=adminData?.aliases||[];
@@ -353,9 +357,31 @@ async function openAdmin(){
   catch(error){reportError(error)}
 }
 async function adminLogin(){
-  screenError='';
-  try{adminSession=await signInAdmin($('#admin-email').value.trim(),$('#admin-password').value);await refreshAdmin();view()}
+  screenError='';adminAuthMessage='';
+  try{adminSession=await signInAdmin($('#admin-email').value.trim(),$('#admin-password').value);adminAuthMode='login';await refreshAdmin();view()}
   catch(error){reportError(error)}
+}
+async function adminSendPasswordReset(){
+  screenError='';adminAuthMessage='';
+  const email=$('#admin-email').value.trim();
+  if(!email){reportError(new Error('Informe seu e-mail para solicitar a redefinição de senha.'));return}
+  try{
+    await requestAdminPasswordReset(email);
+    adminAuthMessage='Se houver uma conta para esse e-mail, você receberá instruções para redefinir a senha.';
+    view();
+  }catch(error){reportError(error)}
+}
+async function adminSaveRecoveryPassword(){
+  screenError='';
+  const password=$('#admin-new-password').value;
+  if(password!==$('#admin-confirm-password').value){reportError(new Error('As senhas não coincidem.'));return}
+  try{
+    await updateAdminPassword(password);
+    adminSession=await getAdminSession();
+    if(!adminSession)throw new Error('A sessão de recuperação expirou. Solicite um novo link para redefinir a senha.');
+    adminAuthMode='login';adminAuthMessage='';
+    await refreshAdmin();view();
+  }catch(error){reportError(error)}
 }
 async function adminLogout(){
   try{await signOutAdmin();adminSession=null;adminData=null;adminFoodEdit=null;newFoodDraft=null;screenError='';view()}
@@ -455,7 +481,7 @@ async function createAndShareQuote(){
     view();
   }catch(error){reportError(error)}
 }
-Object.assign(window,{S,DEF,save,view,go,doParse,tg,setCustomerName,syncCatalog,openAdmin,adminLogin,adminLogout,saveConfigFromForm,saveFoodFromForm,editAdminFood,cancelFoodEdit,setFoodStatus,deleteFood,saveAliasFromForm,deleteAlias,startPendingFood,startRemoteFoodRequest,createAndShareQuote});
+Object.assign(window,{S,DEF,save,view,go,doParse,tg,setCustomerName,syncCatalog,openAdmin,adminLogin,adminSendPasswordReset,adminSaveRecoveryPassword,adminLogout,saveConfigFromForm,saveFoodFromForm,editAdminFood,cancelFoodEdit,setFoodStatus,deleteFood,saveAliasFromForm,deleteAlias,startPendingFood,startRemoteFoodRequest,createAndShareQuote});
 $('#th').onclick=()=>{const d=document.documentElement,dark=d.dataset.theme==='dark'||(!d.dataset.theme&&matchMedia('(prefers-color-scheme:dark)').matches);d.dataset.theme=S.theme=dark?'light':'dark';save();view()};
 $('#sync').onclick=syncCatalog;
 $('#admin').onclick=openAdmin;
@@ -465,6 +491,16 @@ catch(error){
   P=[];planError=error instanceof Error?error.message:String(error);
 }
 save();
+subscribeToAdminPasswordRecovery(isAdmin=>{
+  adminAuthMessage='';
+  if(isAdmin){
+    adminSession=null;adminAuthMode='recovery';screenError='';
+  }else{
+    adminAuthMode='login';
+    screenError='O link de recuperação não pertence a uma conta administradora. Verifique o e-mail ou solicite um novo link.';
+  }
+  view();
+});
 loadSavedCatalog().then(snapshot=>{catalogSnapshot=snapshot;net();view()}).catch(reportError);
 getAdminSession().then(async session=>{adminSession=session;if(session)await refreshAdmin();view()}).catch(reportError);
 function net(){
