@@ -57,7 +57,7 @@ function makeEngineItem(alternative, food) {
     cooking: { factor: Number(food.cooking_factor) || DEFAULT_COOKING_FACTORS[food.category] || 1 },
     pricing: {
       unit: purchaseUnitName,
-      price: Number(food.price_per_purchase_unit),
+      price: food.price_per_purchase_unit == null ? 0 : Number(food.price_per_purchase_unit),
       estimated: false,
       source: 'catalog',
     },
@@ -77,7 +77,8 @@ function chooseByActualPurchaseCost(alternatives, state, day, days, lookup) {
   }
   const candidates = alternatives.map(alternative => {
     const food = lookup.get(sanitizeFoodName(alternative.name));
-    if (!food || normalizeBaseUnit(food.base_unit) !== (alternative.ml ? 'ml' : alternative.g ? 'g' : 'un')) {
+    if (!food || food.price_per_purchase_unit == null
+      || normalizeBaseUnit(food.base_unit) !== (alternative.ml ? 'ml' : alternative.g ? 'g' : 'un')) {
       return { alternative, cost: null };
     }
     const item = makeEngineItem(alternative, food);
@@ -154,7 +155,9 @@ export function calculateCommercialQuote(meals, state, catalog, now = new Date()
             unitLabel: food?.purchase_unit_label ?? (baseUnit === 'g' ? 'g' : baseUnit === 'ml' ? 'ml' : 'un'),
             cost: null,
             purchaseCost: null,
-            pending: !food || food.price_per_purchase_unit == null || unitMismatch,
+            pending: !catalog?.unavailable && (!food || unitMismatch || (food.price_per_purchase_unit == null && !catalog?.pricesProtected)),
+            pricingUnavailable: Boolean(catalog?.unavailable || (food && food.price_per_purchase_unit == null && catalog?.pricesProtected)),
+            catalogUnavailable: Boolean(catalog?.unavailable),
             unitMismatch,
             showUnitPrice: catalog?.config?.show_food_prices ?? false,
           };
@@ -163,9 +166,11 @@ export function calculateCommercialQuote(meals, state, catalog, now = new Date()
         const factor = unitMismatch ? 1 : Number(food?.cooking_factor) || DEFAULT_COOKING_FACTORS[line.category] || 1;
         line.rawAmount += selected.g || selected.ml ? prescribedAmount / factor : prescribedAmount;
         line.unitMismatch ||= unitMismatch;
-        line.pending ||= !food || food.price_per_purchase_unit == null || unitMismatch;
+        line.pending ||= !catalog?.unavailable && (!food || unitMismatch || (food.price_per_purchase_unit == null && !catalog?.pricesProtected));
+        line.pricingUnavailable ||= Boolean(catalog?.unavailable || (food && food.price_per_purchase_unit == null && catalog?.pricesProtected));
+        line.catalogUnavailable ||= Boolean(catalog?.unavailable);
         requirements.set(key, line);
-        if (food && !unitMismatch && food.price_per_purchase_unit != null) {
+        if (food && !unitMismatch && (food.price_per_purchase_unit != null || catalog?.pricesProtected)) {
           pricedSelections.push(makeEngineItem(selected, food));
         }
         chosenNames.push(selected.name);
@@ -184,6 +189,7 @@ export function calculateCommercialQuote(meals, state, catalog, now = new Date()
       pendingFoods.set(`${line.foodId ?? `pending:${sanitizeFoodName(line.name)}`}|${normalizeBaseUnit(line.baseUnit)}`, line);
       continue;
     }
+    if (line.pricingUnavailable && line.catalogUnavailable) continue;
     const amount = calculated.get(`${line.foodId}|${normalizeBaseUnit(line.baseUnit)}`);
     if (!amount) {
       line.pending = true;
@@ -193,8 +199,8 @@ export function calculateCommercialQuote(meals, state, catalog, now = new Date()
     line.rawAmount = amount.rawQuantity;
     line.purchaseAmount = amount.purchaseQuantity;
     line.packages = amount.packages;
-    line.cost = amount.consumedCost;
-    line.purchaseCost = amount.purchaseCost;
+    line.cost = line.pricingUnavailable ? null : amount.consumedCost;
+    line.purchaseCost = line.pricingUnavailable ? null : amount.purchaseCost;
   }
 
   const lines = [...requirements.values()];
@@ -202,7 +208,7 @@ export function calculateCommercialQuote(meals, state, catalog, now = new Date()
   const totalPurchaseCost = lines.reduce((total, line) => total + (line.purchaseCost ?? 0), 0);
   const config = catalog?.config ?? null;
   const configError = validateConfig(config, state.days);
-  const hasPending = lines.some(line => line.pending);
+  const hasPending = lines.some(line => line.pending || line.pricingUnavailable);
   const productionCost = (
     Number(config?.packaging_cost_per_meal ?? 0)
     + Number(config?.labor_cost_per_meal ?? 0)
@@ -213,16 +219,22 @@ export function calculateCommercialQuote(meals, state, catalog, now = new Date()
   const finalPrice = !configError && !hasPending && !noPortions
     ? (knownFoodCost + productionCost) / (1 - rate)
     : null;
+  const markupAmount = finalPrice == null ? null : finalPrice * Number(config?.markup_percent ?? 0) / 100;
+  const appFeeAmount = finalPrice == null ? null : finalPrice * Number(config?.app_fee_percent ?? 0) / 100;
 
   return {
     meals: menu,
     lines,
     pendingFoods: [...pendingFoods.values()],
+    pricingUnavailable: lines.some(line => line.pricingUnavailable),
+    catalogUnavailable: Boolean(catalog?.unavailable),
     marmitaCount,
     foodCost: hasPending ? null : knownFoodCost,
     knownFoodCost,
     totalPurchaseCost,
     productionCost,
+    markupAmount,
+    appFeeAmount,
     finalPrice,
     unitPrice: finalPrice != null && marmitaCount > 0 ? finalPrice / marmitaCount : null,
     status: configError ? 'configuration-error' : noPortions ? 'no-portions' : hasPending ? 'provisional' : 'ready',
@@ -243,6 +255,13 @@ export function formatQuantity(value, unit) {
 export function createQuoteSnapshot(quote, state, customerName = '') {
   return structuredClone({
     id: crypto.randomUUID(),
+    requestKey: JSON.stringify({
+      text: state.text,
+      days: state.days,
+      mode: state.mode,
+      off: state.off,
+      moff: state.moff,
+    }),
     customerName: customerName.trim(),
     createdAt: quote.generatedAt,
     days: state.days,
@@ -254,9 +273,13 @@ export function createQuoteSnapshot(quote, state, customerName = '') {
     knownFoodCost: quote.knownFoodCost,
     totalPurchaseCost: quote.totalPurchaseCost,
     productionCost: quote.productionCost,
+    markupAmount: quote.markupAmount,
+    appFeeAmount: quote.appFeeAmount,
     finalPrice: quote.finalPrice,
     unitPrice: quote.unitPrice,
     status: quote.status,
+    configError: quote.configError,
+    pricingUnavailable: quote.pricingUnavailable,
     pendingFoods: quote.pendingFoods,
     configSnapshot: quote.configSnapshot,
     syncedAt: quote.syncedAt,
@@ -269,7 +292,6 @@ export function formatWhatsAppQuote(snapshot) {
     style: 'currency',
     currency: snapshot.configSnapshot?.currency ?? 'BRL',
   });
-  const showFoodPrices = snapshot.configSnapshot?.show_food_prices ?? false;
   const lines = [
     `Orçamento NutriFlow${snapshot.customerName ? ` — ${snapshot.customerName}` : ''}`,
     `Ciclo: ${snapshot.days} dias / ${snapshot.marmitaCount} marmitas`,
@@ -280,10 +302,10 @@ export function formatWhatsAppQuote(snapshot) {
       ...meal.selections.map(([selection, count]) => `  • ${count} dia(s): ${selection}`),
     ]),
     '',
-    showFoodPrices
-      ? `Custo dos alimentos: ${snapshot.foodCost == null ? `provisório (${money.format(snapshot.knownFoodCost)} conhecido)` : money.format(snapshot.foodCost)}`
-      : 'Preços individuais dos alimentos não exibidos.',
-    `Custo de confecção: ${money.format(snapshot.productionCost)}`,
+    `Custo dos alimentos: ${snapshot.pricingUnavailable ? 'indisponível sem conexão com o servidor' : snapshot.foodCost == null ? `provisório (${money.format(snapshot.knownFoodCost)} conhecido)` : money.format(snapshot.foodCost)}`,
+    `Custo de confecção: ${snapshot.configError ? 'a confirmar após sincronizar' : money.format(snapshot.productionCost)}`,
+    `Markup: ${snapshot.markupAmount == null ? 'sujeito à confirmação' : money.format(snapshot.markupAmount)}`,
+    `Taxa do app: ${snapshot.appFeeAmount == null ? 'sujeita à confirmação' : money.format(snapshot.appFeeAmount)}`,
     `Total estimado: ${snapshot.finalPrice == null ? 'Provisório / sujeito à confirmação' : money.format(snapshot.finalPrice)}`,
     `Por marmita: ${snapshot.unitPrice == null ? 'sujeito à confirmação' : money.format(snapshot.unitPrice)}`,
     ...(snapshot.pendingFoods.length

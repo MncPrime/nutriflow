@@ -82,6 +82,7 @@ input[type=checkbox]{width:22px;height:22px;flex:none;padding:0}.mh label,.oh{di
 .sync-error{border:1px solid var(--bad);border-radius:10px;padding:10px;margin-bottom:12px;color:var(--bad)}
 .quote-status{color:var(--mut);font-size:14px}
 .quote-pending{display:block;color:var(--bad);font-size:12px}
+.quote-breakdown{display:grid;gap:8px}.quote-breakdown div{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid var(--line);padding:4px 0}.quote-breakdown span{color:var(--mut)}
 @media(max-width:420px){.plan-meal{padding:12px}.plan-heading h2{font-size:20px}.plan-meal-name{font-size:16px}.chip{font-size:12px;padding:7px 10px;min-height:38px}}
 </style>
 </head>
@@ -107,11 +108,15 @@ import {
   saveAdminFood,
   signInAdmin,
   signOutAdmin,
+  requestCommercialQuote,
+  submitFoodValidationRequests,
+  resolveFoodValidationRequest,
   supabaseConfigured,
   synchronizeCatalog,
 } from './src/data/catalog-service.js';
 import {
   getPendingFoods,
+  getCachedQuoteSnapshot,
   getQuoteSnapshots,
   deletePendingFood,
   savePendingFood,
@@ -163,9 +168,11 @@ const cat=n=>(KW.find(k=>k[1].test(n))||['out'])[0];
 import { sanitizeFoodName } from './src/utils/food-matching.js';
 let S;try{S=JSON.parse(localStorage.getItem('nf2')||'null')}catch(e){}
 S=Object.assign({text:DEF,days:14,mode:'var',budget:0,tab:0,theme:'',off:{},moff:{},prices:{},priceOverrides:{},customerName:''},S||{});
-let tab=Number.isInteger(S.tab)&&S.tab>=0&&S.tab<=4?S.tab:0,P,catalogSnapshot=null,adminSession=null,adminData=null,adminFoodEdit=null,newFoodDraft=null,screenError='',planError='',isSyncing=false,quoteHistory=[],adminPending=[],lastQuoteLink='';
+let tab=Number.isInteger(S.tab)&&S.tab>=0&&S.tab<=4?S.tab:0,P,catalogSnapshot=null,adminSession=null,adminData=null,adminFoodEdit=null,newFoodDraft=null,screenError='',planError='',isSyncing=false,quoteHistory=[],adminPending=[],lastQuoteLink='',liveQuote=null,liveQuoteKey='',quoteRequestInFlight='',quoteErrorKey='',offlineSnapshot=null,offlineSnapshotKey='',offlineLookupKey='',adminRequests=[];
 S.tab=tab;
-const save=()=>{S.tab=tab;lastQuoteLink='';try{localStorage.setItem('nf2',JSON.stringify(S))}catch(e){}};
+function quoteKeyForState(state=S){return JSON.stringify({text:state.text,days:state.days,mode:state.mode,off:state.off,moff:state.moff})}
+let activeQuoteKey=quoteKeyForState();
+const save=()=>{S.tab=tab;const nextKey=quoteKeyForState();if(nextKey!==activeQuoteKey){activeQuoteKey=nextKey;liveQuote=null;liveQuoteKey='';offlineSnapshot=null;offlineSnapshotKey='';quoteErrorKey='';lastQuoteLink=''}try{localStorage.setItem('nf2',JSON.stringify(S))}catch(e){}};
 const fmtMoney=(value,currency=catalogSnapshot?.config?.currency||'BRL')=>new Intl.NumberFormat('pt-BR',{style:'currency',currency}).format(value);
 const hasPrice=value=>value!==undefined&&value!==null&&value!==''&&Number.isFinite(Number(value));
 const num=s=>{s=s.replace(',','.');if(s.includes('/')){const[a,b]=s.split('/');return a/b}return parseFloat(s)};
@@ -193,13 +200,42 @@ function parsePlan(t){
 }
 const sector=it=>it.cat==='supl'?'Suplementos':it.cat==='prot'?'Açougue':it.cat==='ovo'||/queijo|mussarela|iogurte|leite/i.test(it.name)?'Laticínios e ovos':/p[aã]o/i.test(it.name)?'Padaria':it.cat==='tub'||/banana|ma[cç][aã]|pera|manga|mam[aã]o|abacaxi|tangerina|laranja|lim[aã]o|kiwi|cenoura|beterraba|vagem|br[oó]colis|couve|chuchu|abobrinha|tomate|pepino/i.test(it.name)?'Hortifrúti':'Mercearia';
 function plan(){
-  const quote=calculateCommercialQuote(P,S,catalogSnapshot);
+  const key=quoteKeyForState();
+  const quote=liveQuoteKey===key
+    ?{...liveQuote,offline:!navigator.onLine}
+    :offlineSnapshotKey===key
+      ?offlineSnapshot
+      :calculateCommercialQuote(P,S,catalogSnapshot||{foods:[],aliases:[],config:null,pricesProtected:true,unavailable:true});
   const lines=quote.lines.map(line=>({...line,cat:line.category,mode:line.baseUnit==='unit'?'n':line.baseUnit,q:line.rawAmount,c:line.prescribedAmount,buy:line.purchaseAmount,p:line.unitPrice,cost:line.cost,sec:sector({name:line.name,cat:line.category})}));
   const out=quote.meals.map(meal=>({m:meal,isM:meal.isMarmita,list:meal.selections}));
   return{N:quote.marmitaCount,out,lines,total:quote.foodCost??quote.knownFoodCost,marm:quote.productionCost,quote};
 }
 const esc=s=>String(s??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 function reportError(error){screenError=error instanceof Error?error.message:String(error);view()}
+function quoteFromSnapshot(snapshot){
+  return{...snapshot,meals:snapshot.selectedMeals,offline:true,syncedAt:snapshot.syncedAt||snapshot.createdAt};
+}
+function loadOfflineQuote(key){
+  if(offlineLookupKey===key||offlineSnapshotKey===key)return;
+  offlineLookupKey=key;
+  getCachedQuoteSnapshot(key).then(snapshot=>{
+    if(key!==quoteKeyForState()||navigator.onLine)return;
+    if(snapshot){offlineSnapshot=quoteFromSnapshot(snapshot);offlineSnapshotKey=key;view()}
+  }).catch(reportError).finally(()=>{if(offlineLookupKey===key)offlineLookupKey=''});
+}
+function ensureOnlineQuote(){
+  const key=quoteKeyForState();
+  if(tab!==3)return;
+  if(!navigator.onLine){loadOfflineQuote(key);return}
+  if(!supabaseConfigured||liveQuoteKey===key||quoteRequestInFlight===key||quoteErrorKey===key)return;
+  quoteRequestInFlight=key;
+  requestCommercialQuote(P,S).then(quote=>{
+    if(key!==quoteKeyForState())return;
+    liveQuote=quote;liveQuoteKey=key;quoteErrorKey='';screenError='';view();
+  }).catch(error=>{
+    if(key===quoteKeyForState()){quoteErrorKey=key;reportError(error)}
+  }).finally(()=>{if(quoteRequestInFlight===key)quoteRequestInFlight=''});
+}
 function renderAdmin(){
   if(!supabaseConfigured)return '<h2>Área administrativa</h2><p class="warn">Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY para conectar ao catálogo.</p>';
   if(!adminSession)return `<h2>Área administrativa</h2><p class="h">Entre com a conta de administrador do Supabase.</p><form class="card admin-form" onsubmit="event.preventDefault();adminLogin()"><label>E-mail<input id="admin-email" type="email" autocomplete="username" required></label><label>Senha<input id="admin-password" type="password" autocomplete="current-password" required></label><button class="p" type="submit">Entrar</button></form>`;
@@ -225,7 +261,7 @@ function renderAdmin(){
     <div class="admin-actions"><button class="p" type="submit">${adminFoodEdit?'Salvar alimento':'Cadastrar alimento'}</button>${adminFoodEdit?'<button class="s" type="button" onclick="cancelFoodEdit()">Cancelar edição</button>':''}</div></form>
     <div>${foods.map(food=>`<div class="admin-food"><div><b>${esc(food.canonical_name)}</b><small>${esc(statusLabels[food.approval_status]||food.approval_status)} · ${fmtMoney(Number(food.price_per_purchase_unit||0))}/${esc(food.purchase_unit_label)} · fator ${esc(food.cooking_factor)}</small></div><div class="admin-actions"><button class="s" onclick="editAdminFood('${esc(food.id)}')">Editar</button>${food.approval_status!=='approved'?`<button class="s" onclick="setFoodStatus('${esc(food.id)}','approved')">Aprovar</button>`:''}${food.approval_status!=='rejected'?`<button class="s" onclick="setFoodStatus('${esc(food.id)}','rejected')">Rejeitar</button>`:''}<button class="s" onclick="deleteFood('${esc(food.id)}')">Excluir</button></div></div>`).join('')||'<p class="net">Nenhum alimento cadastrado.</p>'}</div></section>
     <section class="card"><h3>Sinônimos</h3><form class="admin-form" onsubmit="event.preventDefault();saveAliasFromForm()"><label>Alimento principal<select id="alias-food">${foods.map(food=>`<option value="${esc(food.id)}">${esc(food.canonical_name)}</option>`).join('')}</select></label><label>Nome alternativo<input id="alias-name" required></label><button class="p" type="submit">Adicionar sinônimo</button></form>${aliases.map(alias=>`<div class="admin-food"><div>${esc(alias.alias)}<small>${esc(foods.find(food=>food.id===alias.food_id)?.canonical_name||'Alimento')}</small></div><button class="s" onclick="deleteAlias('${esc(alias.id)}')">Remover</button></div>`).join('')}</section>
-    <section class="card"><h3>Solicitações locais</h3>${adminPending.map(food=>`<div class="admin-food"><div>${esc(food.name)}<small>${formatQuantity(food.rawAmount,food.baseUnit)} · ${new Date(food.createdAt).toLocaleString('pt-BR')}</small></div><button class="s" data-pending-name="${esc(food.normalizedName)}" onclick="startPendingFood(this.dataset.pendingName)">${food.foodId?'Revisar catálogo':'Cadastrar'}</button></div>`).join('')||'<p class="net">Nenhuma solicitação pendente neste dispositivo.</p>'}</section>
+    <section class="card"><h3>Solicitações para validação</h3>${adminRequests.map(request=>`<div class="admin-food"><div>${esc(request.food_name)}<small>${formatQuantity(request.requested_quantity,request.base_unit)} · ${new Date(request.created_at).toLocaleString('pt-BR')}</small></div><button class="s" data-request-id="${esc(request.id)}" onclick="startRemoteFoodRequest(this.dataset.requestId)">${request.resolved_food_id?'Revisar cadastro':'Cadastrar'}</button></div>`).join('')||'<p class="net">Nenhuma solicitação recebida do servidor.</p>'}${adminPending.map(food=>`<div class="admin-food"><div>${esc(food.name)}<small>Dispositivo local · ${formatQuantity(food.rawAmount,food.baseUnit)} · ${new Date(food.createdAt).toLocaleString('pt-BR')}</small></div><button class="s" data-pending-name="${esc(food.normalizedName)}" onclick="startPendingFood(this.dataset.pendingName)">${food.foodId?'Revisar catálogo':'Cadastrar'}</button></div>`).join('')}</section>
     <section class="card"><h3>Orçamentos recentes neste dispositivo</h3>${quoteHistory.slice(0,5).map(quote=>`<div class="admin-food"><div>${esc(quote.customerName||'Sem nome')}<small>${new Date(quote.createdAt).toLocaleString('pt-BR')} · ${quote.finalPrice==null?'provisório':fmtMoney(quote.finalPrice)}</small></div></div>`).join('')||'<p class="net">Nenhum orçamento salvo.</p>'}</section>`;
 }
 function view(){
@@ -267,13 +303,17 @@ function view(){
     quote.lines.forEach(line=>(sections[sector({name:line.name,cat:line.category})]=sections[sector({name:line.name,cat:line.category})]||[]).push(line));
     const pending=quote.pendingFoods.length?`<p class="warn quote-status" role="status">Orçamento provisório: ${quote.pendingFoods.length} alimento(s) precisam de validação do administrador.</p>`:'';
     const errors=quote.configError?`<p class="warn" role="alert">${esc(quote.configError)}</p>`:'';
-    m.innerHTML=!quote.lines.length?`<h2>Compras e orçamento</h2>${errors}<div class="empty">Marque refeições na aba Plano ou sincronize o catálogo.</div>`:`<h2>Compras e orçamento</h2>${errors}${pending}<div class="card kpi"><div><small>Orçamento do ciclo</small><b>${quote.finalPrice==null?'A confirmar':fmtMoney(quote.finalPrice)}</b></div><div><small>Por marmita</small><b>${quote.unitPrice==null?'A confirmar':fmtMoney(quote.unitPrice)}</b></div><div><small>Itens</small><b>${quote.lines.length}</b></div></div><p class="quote-status">${quote.status==='ready'?'Orçamento calculado com o catálogo aprovado.':quote.offline&&quote.syncedAt?'Usando catálogo sincronizado offline.':'Os valores dependem da validação do catálogo.'}</p>
-    ${Object.keys(sections).sort().map(section=>`<div class="sec">${esc(section)}</div>${sections[section].map(line=>`<div class="ln"><div>${esc(line.name)}<small>${line.unitMismatch?'Unidade incompatível com o catálogo':line.pending?'Aguardando aprovação ou preço do administrador':line.category==='out'||line.category==='supl'||line.category==='ovo'?'Necessário '+formatQuantity(line.rawAmount,line.baseUnit):'Prescrito '+formatQuantity(line.prescribedAmount,line.baseUnit)+' → cru '+formatQuantity(line.rawAmount,line.baseUnit)}</small>${line.pending?'<small class="quote-pending">Pendente de validação</small>':''}</div><div><b>${line.purchaseAmount==null?'A confirmar':formatQuantity(line.purchaseAmount,line.unitLabel)}</b>${line.showUnitPrice&&line.unitPrice!=null?`<small>${fmtMoney(line.unitPrice)}/${esc(line.unitLabel)}</small>`:''}${line.showUnitPrice&&line.purchaseCost!=null?`<small>Compra: ${fmtMoney(line.purchaseCost)}</small>`:''}</div></div>`).join('')}`).join('')}
-    ${quote.lines.length&&quote.marmitaCount?`<button class="p" onclick="createAndShareQuote()">${quote.status==='ready'?'Salvar orçamento e preparar WhatsApp':'Salvar solicitação para validação'}</button>`:''}${lastQuoteLink?`<p><a class="s" href="${lastQuoteLink}" target="_blank" rel="noopener">Abrir orçamento no WhatsApp</a></p>`:''}${quote.offline&&quote.syncedAt?`<p class="net">Catálogo sincronizado em ${new Date(quote.syncedAt).toLocaleString('pt-BR')}.</p>`:''}`;
+    const breakdown=quote.configError
+      ?'<p class="quote-status">Um novo orçamento precisa de conexão para calcular valores. Quantidades continuam disponíveis.</p>'
+      :`<div class="card quote-breakdown"><div><span>Custo dos alimentos${quote.foodCost==null?' (parcial conhecido)':''}</span><b>${fmtMoney(quote.knownFoodCost,quote.currency)}</b></div><div><span>Confecção</span><b>${fmtMoney(quote.productionCost,quote.currency)}</b></div><div><span>Markup</span><b>${quote.markupAmount==null?'A confirmar':fmtMoney(quote.markupAmount,quote.currency)}</b></div><div><span>Taxa do app</span><b>${quote.appFeeAmount==null?'A confirmar':fmtMoney(quote.appFeeAmount,quote.currency)}</b></div><div><span>Entrega</span><b>A combinar</b></div></div>`;
+    m.innerHTML=!quote.lines.length?`<h2>Compras e orçamento</h2>${errors}<div class="empty">Marque refeições na aba Plano ou sincronize o catálogo.</div>`:`<h2>Compras e orçamento</h2>${errors}${pending}<div class="card kpi"><div><small>Orçamento do ciclo</small><b>${quote.finalPrice==null?'A confirmar':fmtMoney(quote.finalPrice,quote.currency)}</b></div><div><small>Por marmita</small><b>${quote.unitPrice==null?'A confirmar':fmtMoney(quote.unitPrice,quote.currency)}</b></div><div><small>Itens</small><b>${quote.lines.length}</b></div></div>${breakdown}<p class="quote-status">${quote.offline&&quote.syncedAt?`Orçamento gerado offline em ${new Date(quote.syncedAt).toLocaleString('pt-BR')} — sujeito à confirmação de disponibilidade.`:quote.status==='ready'?'Orçamento calculado com o catálogo aprovado.':'Os valores dependem da validação do catálogo.'}</p>
+    ${Object.keys(sections).sort().map(section=>`<div class="sec">${esc(section)}</div>${sections[section].map(line=>`<div class="ln"><div>${esc(line.name)}<small>${line.unitMismatch?'Unidade incompatível com o catálogo':line.pending?'Aguardando aprovação ou preço do administrador':line.pricingUnavailable?'Preço protegido; conecte ao servidor para calcular':line.category==='out'||line.category==='supl'||line.category==='ovo'?'Necessário '+formatQuantity(line.rawAmount,line.baseUnit):'Prescrito '+formatQuantity(line.prescribedAmount,line.baseUnit)+' → cru '+formatQuantity(line.rawAmount,line.baseUnit)}</small>${line.pending?'<small class="quote-pending">Pendente de validação</small>':''}</div><div><b>${line.purchaseAmount==null?'A confirmar':formatQuantity(line.purchaseAmount,line.unitLabel)}</b>${line.showUnitPrice&&line.unitPrice!=null?`<small>${fmtMoney(line.unitPrice)}/${esc(line.unitLabel)}</small>`:''}${line.showUnitPrice&&line.purchaseCost!=null?`<small>Compra: ${fmtMoney(line.purchaseCost)}</small>`:''}</div></div>`).join('')}`).join('')}
+    ${quote.lines.length&&quote.marmitaCount?`<button class="p" onclick="createAndShareQuote()">${quote.status==='ready'?'Salvar orçamento e preparar WhatsApp':quote.pendingFoods.length?'Salvar solicitação para validação':'Salvar orçamento provisório'}</button>`:''}${lastQuoteLink?`<p><a class="s" href="${lastQuoteLink}" target="_blank" rel="noopener">Abrir orçamento no WhatsApp</a></p>`:''}${quote.offline&&quote.syncedAt?`<p class="net">Catálogo sincronizado em ${new Date(quote.syncedAt).toLocaleString('pt-BR')}.</p>`:''}`;
   }
   if(tab===4)m.innerHTML=renderAdmin();
   if(screenError)m.insertAdjacentHTML('afterbegin',`<p class="sync-error" role="alert">${esc(screenError)}</p>`);
   if(planError)m.insertAdjacentHTML('afterbegin',`<p class="warn" role="alert">${esc(planError)}</p>`);
+  ensureOnlineQuote();
 }
 function go(i){tab=Math.min(4,Math.max(0,Number(i)||0));screenError='';save();view();$('#m').scrollTop=0}
 function doParse(t){
@@ -285,14 +325,25 @@ function tg(o,k){S[o][k]=!S[o][k];save();view()}
 function setCustomerName(value){S.customerName=value;save()}
 async function syncCatalog(){
   if(isSyncing)return;
-  isSyncing=true;screenError='';view();
-  try{catalogSnapshot=await synchronizeCatalog()}
+  isSyncing=true;screenError='';quoteErrorKey='';net();view();
+  try{
+    catalogSnapshot=await synchronizeCatalog();
+    liveQuote=null;liveQuoteKey='';quoteErrorKey='';
+    await flushLocalFoodRequests();
+    if(adminSession)await refreshAdmin();
+  }
   catch(error){reportError(error)}
-  finally{isSyncing=false;view()}
+  finally{isSyncing=false;net();view()}
+}
+async function flushLocalFoodRequests(){
+  const pending=await getPendingFoods();
+  if(!pending.length)return;
+  await submitFoodValidationRequests(pending);
+  for(const food of pending)await deletePendingFood(food.normalizedName);
 }
 async function refreshAdmin(){
   const [data,pending,quotes]=await Promise.all([loadAdminData(),getPendingFoods(),getQuoteSnapshots()]);
-  adminData=data;adminPending=pending;quoteHistory=quotes;
+  adminData=data;adminPending=pending;adminRequests=data.requests;quoteHistory=quotes;
 }
 async function openAdmin(){
   tab=4;screenError='';save();view();
@@ -313,7 +364,7 @@ async function saveConfigFromForm(){
   if(!config?.id){reportError(new Error('A configuração comercial ativa não foi encontrada.'));return}
   try{
     await saveAdminConfig({id:config.id,business_name:$('#cfg-business-name').value,currency:$('#cfg-currency').value,show_food_prices:$('#cfg-show-prices').checked,packaging_cost_per_meal:$('#cfg-packaging').value,labor_cost_per_meal:$('#cfg-labor').value,overhead_cost_per_meal:$('#cfg-overhead').value,markup_percent:$('#cfg-markup').value,app_fee_percent:$('#cfg-fee').value});
-    await refreshAdmin();catalogSnapshot=await synchronizeCatalog();screenError='';view();
+    await refreshAdmin();catalogSnapshot=await synchronizeCatalog();liveQuote=null;liveQuoteKey='';screenError='';view();
   }catch(error){reportError(error)}
 }
 function foodFormValues(status=$('#food-status').value){
@@ -324,9 +375,11 @@ async function saveFoodFromForm(){
   if(food.approval_status==='approved'&&!hasPrice(food.price_per_purchase_unit)){reportError(new Error('Informe um preço válido antes de aprovar o alimento.'));return}
   try{
     const pendingName=newFoodDraft?.normalizedName;
-    await saveAdminFood(food);
+    const requestId=newFoodDraft?.requestId;
+    const savedFood=await saveAdminFood(food);
+    if(requestId)await resolveFoodValidationRequest(requestId,food.approval_status,savedFood.id);
     if(pendingName)await deletePendingFood(pendingName);
-    adminFoodEdit=null;newFoodDraft=null;await refreshAdmin();catalogSnapshot=await synchronizeCatalog();screenError='';view();
+    adminFoodEdit=null;newFoodDraft=null;await refreshAdmin();catalogSnapshot=await synchronizeCatalog();liveQuote=null;liveQuoteKey='';screenError='';view();
   }catch(error){reportError(error)}
 }
 function editAdminFood(id){adminFoodEdit=id;newFoodDraft=null;screenError='';view()}
@@ -335,20 +388,25 @@ async function setFoodStatus(id,status){
   const food=adminData?.foods.find(item=>item.id===id);
   if(!food)return;
   if(status==='approved'&&!hasPrice(food.price_per_purchase_unit)){reportError(new Error('Edite o alimento e informe um preço válido antes de aprová-lo.'));return}
-  try{await saveAdminFood({...food,approval_status:status});await refreshAdmin();catalogSnapshot=await synchronizeCatalog();screenError='';view()}
+  try{
+    await saveAdminFood({...food,approval_status:status});
+    const request=adminRequests.find(item=>item.resolved_food_id===id);
+    if(request)await resolveFoodValidationRequest(request.id,status,id);
+    await refreshAdmin();catalogSnapshot=await synchronizeCatalog();liveQuote=null;liveQuoteKey='';screenError='';view();
+  }
   catch(error){reportError(error)}
 }
 async function deleteFood(id){
   if(!confirm('Excluir este alimento e seus sinônimos?'))return;
-  try{await deleteAdminFood(id);await refreshAdmin();catalogSnapshot=await synchronizeCatalog();adminFoodEdit=null;screenError='';view()}
+  try{await deleteAdminFood(id);await refreshAdmin();catalogSnapshot=await synchronizeCatalog();liveQuote=null;liveQuoteKey='';adminFoodEdit=null;screenError='';view()}
   catch(error){reportError(error)}
 }
 async function saveAliasFromForm(){
-  try{await saveAdminAlias({foodId:$('#alias-food').value,alias:$('#alias-name').value});await refreshAdmin();catalogSnapshot=await synchronizeCatalog();screenError='';view()}
+  try{await saveAdminAlias({foodId:$('#alias-food').value,alias:$('#alias-name').value});await refreshAdmin();catalogSnapshot=await synchronizeCatalog();liveQuote=null;liveQuoteKey='';screenError='';view()}
   catch(error){reportError(error)}
 }
 async function deleteAlias(id){
-  try{await deleteAdminAlias(id);await refreshAdmin();catalogSnapshot=await synchronizeCatalog();screenError='';view()}
+  try{await deleteAdminAlias(id);await refreshAdmin();catalogSnapshot=await synchronizeCatalog();liveQuote=null;liveQuoteKey='';screenError='';view()}
   catch(error){reportError(error)}
 }
 function startPendingFood(normalizedName){
@@ -361,16 +419,41 @@ function startPendingFood(normalizedName){
   newFoodDraft={normalizedName,canonical_name:pending.name,category:pending.category,base_unit:pending.baseUnit,purchase_unit_label:pending.baseUnit==='g'?'kg':pending.baseUnit==='ml'?'l':'un',purchase_increment:pending.baseUnit==='unit'?1:1000,price_per_purchase_unit:'',cooking_factor:pending.category==='prot'?.75:pending.category==='arroz'?2.5:pending.category==='feijao'?2.8:pending.category==='mac'?2.2:1,approval_status:'pending'};
   view();
 }
+function startRemoteFoodRequest(requestId){
+  const request=adminRequests.find(item=>item.id===requestId);
+  if(!request)return;
+  const existing=adminData?.foods.find(food=>food.id===request.resolved_food_id);
+  if(existing){editAdminFood(existing.id);return}
+  adminFoodEdit=null;
+  newFoodDraft={
+    requestId:request.id,
+    canonical_name:request.food_name,
+    category:request.category,
+    base_unit:request.base_unit,
+    purchase_unit_label:request.base_unit==='g'?'kg':request.base_unit==='ml'?'l':'un',
+    purchase_increment:request.base_unit==='unit'?1:1000,
+    price_per_purchase_unit:'',
+    cooking_factor:request.category==='prot'?.75:request.category==='arroz'?2.5:request.category==='feijao'?2.8:request.category==='mac'?2.2:1,
+    approval_status:'pending',
+  };
+  view();
+}
 async function createAndShareQuote(){
   try{
     const quote=plan().quote,snapshot=createQuoteSnapshot(quote,S,S.customerName);
     for(const pending of quote.pendingFoods)await savePendingFood({...pending,normalizedName:sanitizeFoodName(pending.name),createdAt:new Date().toISOString()});
     await saveQuoteSnapshot(snapshot);lastQuoteLink=formatWhatsAppQuote(snapshot);screenError='';
+    if(navigator.onLine&&quote.pendingFoods.length){
+      try{
+        await submitFoodValidationRequests(quote.pendingFoods);
+        for(const pending of quote.pendingFoods)await deletePendingFood(sanitizeFoodName(pending.name));
+      }catch(error){screenError=error instanceof Error?error.message:String(error)}
+    }
     if(adminSession)await refreshAdmin();
     view();
   }catch(error){reportError(error)}
 }
-Object.assign(window,{S,DEF,save,view,go,doParse,tg,setCustomerName,syncCatalog,openAdmin,adminLogin,adminLogout,saveConfigFromForm,saveFoodFromForm,editAdminFood,cancelFoodEdit,setFoodStatus,deleteFood,saveAliasFromForm,deleteAlias,startPendingFood,createAndShareQuote});
+Object.assign(window,{S,DEF,save,view,go,doParse,tg,setCustomerName,syncCatalog,openAdmin,adminLogin,adminLogout,saveConfigFromForm,saveFoodFromForm,editAdminFood,cancelFoodEdit,setFoodStatus,deleteFood,saveAliasFromForm,deleteAlias,startPendingFood,startRemoteFoodRequest,createAndShareQuote});
 $('#th').onclick=()=>{const d=document.documentElement,dark=d.dataset.theme==='dark'||(!d.dataset.theme&&matchMedia('(prefers-color-scheme:dark)').matches);d.dataset.theme=S.theme=dark?'light':'dark';save();view()};
 $('#sync').onclick=syncCatalog;
 $('#admin').onclick=openAdmin;
@@ -380,10 +463,22 @@ catch(error){
   P=[];planError=error instanceof Error?error.message:String(error);
 }
 save();
-loadSavedCatalog().then(snapshot=>{catalogSnapshot=snapshot;view()}).catch(reportError);
+loadSavedCatalog().then(snapshot=>{catalogSnapshot=snapshot;net();view()}).catch(reportError);
 getAdminSession().then(async session=>{adminSession=session;if(session)await refreshAdmin();view()}).catch(reportError);
-const net=()=>$('#net').textContent=navigator.onLine?'':'offline';
-addEventListener('online',net);addEventListener('offline',net);net();
+function net(){
+  const indicator=$('#net');
+  if(!navigator.onLine){
+    indicator.textContent=catalogSnapshot?.syncedAt
+      ?`Offline · catálogo de ${new Date(catalogSnapshot.syncedAt).toLocaleString('pt-BR')} · confirme disponibilidade`
+      :'Offline · sincronize para consultar preços';
+    return;
+  }
+  indicator.textContent=isSyncing?'Sincronizando catálogo…':'';
+}
+addEventListener('online',()=>{net();screenError='';syncCatalog()});
+addEventListener('offline',()=>{screenError='';net();view()});
+net();
+if(navigator.onLine&&supabaseConfigured)syncCatalog();
 if('serviceWorker'in navigator)addEventListener('load',()=>navigator.serviceWorker.register('./sw.js'));
 view();
 </script>

@@ -21,9 +21,9 @@ export async function synchronizeCatalog() {
     throw new Error('Supabase não configurado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.');
   }
 
-  const [foodsResult, aliasesResult, configResult] = await Promise.all([
+  const [foodsResult, aliasesResult] = await Promise.all([
     supabase.from('foods')
-      .select('id,business_id,canonical_name,category,base_unit,purchase_unit_label,purchase_increment,price_per_purchase_unit,cooking_factor,approval_status')
+      .select('id,business_id,canonical_name,category,base_unit,purchase_unit_label,purchase_increment,cooking_factor,approval_status')
       .eq('business_id', BUSINESS_ID)
       .eq('approval_status', 'approved')
       .order('canonical_name'),
@@ -31,24 +31,20 @@ export async function synchronizeCatalog() {
       .select('id,business_id,food_id,alias')
       .eq('business_id', BUSINESS_ID)
       .order('alias'),
-    supabase.from('business_configs')
-      .select('business_id,business_name,currency,show_food_prices,packaging_cost_per_meal,labor_cost_per_meal,overhead_cost_per_meal,markup_percent,app_fee_percent,is_active,updated_at')
-      .eq('business_id', BUSINESS_ID)
-      .eq('is_active', true)
-      .single(),
   ]);
 
-  const failed = [foodsResult, aliasesResult, configResult].find(result => result.error);
+  const failed = [foodsResult, aliasesResult].find(result => result.error);
   if (failed) throw new Error(`Falha ao sincronizar catálogo: ${failed.error.message}`);
-  if (!Array.isArray(foodsResult.data) || !Array.isArray(aliasesResult.data) || !configResult.data) {
-    throw new Error('Supabase retornou um catálogo/configuração inválido.');
+  if (!Array.isArray(foodsResult.data) || !Array.isArray(aliasesResult.data)) {
+    throw new Error('Supabase retornou um catálogo inválido.');
   }
 
   const approvedIds = new Set(foodsResult.data.map(food => food.id));
   const snapshot = {
     foods: foodsResult.data,
     aliases: aliasesResult.data.filter(alias => approvedIds.has(alias.food_id)),
-    config: configResult.data,
+    config: null,
+    pricesProtected: true,
     syncedAt: new Date().toISOString(),
   };
   validateCatalogSnapshot(snapshot);
@@ -58,32 +54,67 @@ export async function synchronizeCatalog() {
 
 export function validateCatalogSnapshot(snapshot) {
   const config = snapshot.config;
-  if (!/^[A-Z]{3}$/.test(config.currency)) {
+  if (config && !/^[A-Z]{3}$/.test(config.currency)) {
     throw new Error('Configuração inválida: informe uma moeda ISO de três letras.');
   }
-  const percentages = [Number(config.markup_percent), Number(config.app_fee_percent)];
-  const costs = [
-    Number(config.packaging_cost_per_meal),
-    Number(config.labor_cost_per_meal),
-    Number(config.overhead_cost_per_meal),
-  ];
-  if (percentages.some(value => !Number.isFinite(value) || value < 0)
-    || percentages[0] + percentages[1] >= 100) {
-    throw new Error('Configuração inválida: markup e taxa do app precisam somar menos de 100%.');
-  }
-  if (costs.some(value => !Number.isFinite(value) || value < 0)) {
-    throw new Error('Configuração inválida: os custos de confecção devem ser valores não negativos.');
+  if (config) {
+    const percentages = [Number(config.markup_percent), Number(config.app_fee_percent)];
+    const costs = [
+      Number(config.packaging_cost_per_meal),
+      Number(config.labor_cost_per_meal),
+      Number(config.overhead_cost_per_meal),
+    ];
+    if (percentages.some(value => !Number.isFinite(value) || value < 0)
+      || percentages[0] + percentages[1] >= 100) {
+      throw new Error('Configuração inválida: markup e taxa do app precisam somar menos de 100%.');
+    }
+    if (costs.some(value => !Number.isFinite(value) || value < 0)) {
+      throw new Error('Configuração inválida: os custos de confecção devem ser valores não negativos.');
+    }
   }
   for (const food of snapshot.foods) {
     if (!food.id || !food.canonical_name || !['g', 'ml', 'unit'].includes(food.base_unit)
-      || !Number.isFinite(Number(food.price_per_purchase_unit))
-      || Number(food.price_per_purchase_unit) < 0
+      || (food.price_per_purchase_unit != null
+        && (!Number.isFinite(Number(food.price_per_purchase_unit)) || Number(food.price_per_purchase_unit) < 0))
       || !Number.isFinite(Number(food.purchase_increment))
       || Number(food.purchase_increment) <= 0
       || !Number.isFinite(Number(food.cooking_factor))
       || Number(food.cooking_factor) <= 0) {
       throw new Error(`Alimento inválido recebido do catálogo: ${food.canonical_name || food.id || 'sem identificação'}.`);
     }
+  }
+}
+
+export async function requestCommercialQuote(meals, state) {
+  if (!supabase) {
+    throw new Error('Supabase não configurado. O orçamento novo exige conexão com o servidor.');
+  }
+  const { data, error } = await supabase.functions.invoke('commercial-quote', {
+    body: { meals, state },
+  });
+  if (error) throw new Error(`Falha ao calcular orçamento: ${error.message}`);
+  if (!data || typeof data !== 'object' || !Array.isArray(data.lines) || !Array.isArray(data.meals)) {
+    throw new Error('Supabase retornou um orçamento inválido.');
+  }
+  return data;
+}
+
+export async function submitFoodValidationRequests(foods) {
+  if (!supabase) throw new Error('Supabase não configurado.');
+  if (!foods.length) return;
+  const rows = foods.map(food => ({
+    business_id: BUSINESS_ID,
+    food_name: String(food.name).trim(),
+    category: food.category,
+    base_unit: food.baseUnit,
+    requested_quantity: Number(food.rawAmount),
+  }));
+  const { error } = await supabase.from('food_validation_requests').upsert(rows, {
+    onConflict: 'business_id,normalized_name',
+    ignoreDuplicates: true,
+  });
+  if (error) {
+    throw new Error(`Falha ao enviar alimentos para validação: ${error.message}`);
   }
 }
 
@@ -113,14 +144,15 @@ export async function signOutAdmin() {
 
 export async function loadAdminData() {
   if (!supabase) throw new Error('Supabase não configurado.');
-  const [foodsResult, aliasesResult, configResult] = await Promise.all([
+  const [foodsResult, aliasesResult, configResult, requestsResult] = await Promise.all([
     supabase.from('foods').select('*').eq('business_id', BUSINESS_ID).order('canonical_name'),
     supabase.from('food_aliases').select('*').eq('business_id', BUSINESS_ID).order('alias'),
     supabase.from('business_configs').select('*').eq('business_id', BUSINESS_ID).eq('is_active', true).single(),
+    supabase.from('food_validation_requests').select('*').eq('business_id', BUSINESS_ID).eq('status', 'pending').order('created_at', { ascending: false }),
   ]);
-  const failed = [foodsResult, aliasesResult, configResult].find(result => result.error);
+  const failed = [foodsResult, aliasesResult, configResult, requestsResult].find(result => result.error);
   if (failed) throw new Error(`Falha ao carregar painel admin: ${failed.error.message}`);
-  return { foods: foodsResult.data, aliases: aliasesResult.data, config: configResult.data };
+  return { foods: foodsResult.data, aliases: aliasesResult.data, config: configResult.data, requests: requestsResult.data };
 }
 
 export async function saveAdminFood(food) {
@@ -165,6 +197,14 @@ export async function deleteAdminAlias(id) {
   if (!supabase) throw new Error('Supabase não configurado.');
   const { error } = await supabase.from('food_aliases').delete().eq('id', id);
   if (error) throw new Error(`Falha ao remover sinônimo: ${error.message}`);
+}
+
+export async function resolveFoodValidationRequest(id, status, foodId = null) {
+  if (!supabase) throw new Error('Supabase não configurado.');
+  const { error } = await supabase.from('food_validation_requests')
+    .update({ status, resolved_food_id: foodId, resolved_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw new Error(`Falha ao atualizar solicitação de alimento: ${error.message}`);
 }
 
 export async function saveAdminConfig({ id, ...values }) {

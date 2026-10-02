@@ -55,7 +55,41 @@ test('commercial quote applies cooking yield, package rounding and business fees
   assert.equal(quote.totalPurchaseCost, 64);
   assert.equal(quote.productionCost, 21);
   assert.ok(Math.abs(quote.finalPrice - ((41.216 + 21) / 0.65)) < 1e-9);
+  assert.ok(Math.abs(quote.markupAmount - quote.finalPrice * 0.3) < 1e-9);
+  assert.ok(Math.abs(quote.appFeeAmount - quote.finalPrice * 0.05) < 1e-9);
   assert.equal(quote.lines.every(line => line.showUnitPrice === false), true);
+});
+
+test('protected offline catalog keeps quantities but never fabricates a new quote', () => {
+  const quote = calculateCommercialQuote(
+    mealPlan,
+    { days: 7, mode: 'var', off: {}, moff: {} },
+    {
+      pricesProtected: true,
+      foods: foods.map(({ price_per_purchase_unit, ...food }) => food),
+      aliases: [],
+      config: null,
+    },
+  );
+
+  assert.equal(quote.status, 'configuration-error');
+  assert.equal(quote.finalPrice, null);
+  assert.equal(quote.pricingUnavailable, true);
+  assert.equal(quote.pendingFoods.length, 0);
+  assert.equal(quote.lines.every(line => line.purchaseAmount != null && line.cost == null), true);
+});
+
+test('offline without a synchronized catalog does not misclassify every food as pending', () => {
+  const quote = calculateCommercialQuote(
+    mealPlan,
+    { days: 7, mode: 'var', off: {}, moff: {} },
+    { foods: [], aliases: [], config: null, pricesProtected: true, unavailable: true },
+  );
+
+  assert.equal(quote.status, 'configuration-error');
+  assert.equal(quote.pendingFoods.length, 0);
+  assert.equal(quote.pricingUnavailable, true);
+  assert.equal(quote.lines.every(line => line.purchaseAmount == null && line.pending === false), true);
 });
 
 test('catalog aliases resolve foods and a disabled per-food price display remains off', () => {
@@ -73,7 +107,7 @@ test('catalog aliases resolve foods and a disabled per-food price display remain
   assert.equal(quote.lines[0].showUnitPrice, false);
 });
 
-test('shared quote hides food costs when the admin has disabled food-price display', () => {
+test('shared quote keeps aggregate costs while hiding individual food prices', () => {
   const quote = calculateCommercialQuote(
     mealPlan,
     { days: 7, mode: 'var', off: {}, moff: {} },
@@ -83,8 +117,10 @@ test('shared quote hides food costs when the admin has disabled food-price displ
   const link = formatWhatsAppQuote(snapshot);
   const message = decodeURIComponent(link.split('?text=')[1]);
 
-  assert.match(message, /Preços individuais dos alimentos não exibidos/);
-  assert.doesNotMatch(message, /Custo dos alimentos:/);
+  assert.match(message, /Custo dos alimentos:/);
+  assert.match(message, /Markup:/);
+  assert.match(message, /Taxa do app:/);
+  assert.match(message, /Entrega: A combinar/);
   assert.match(message, /Total estimado:/);
 });
 
