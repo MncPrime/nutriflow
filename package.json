@@ -1,9 +1,19 @@
 {
+  "name": "nutriflow",
+  "version": "1.1.0",
+  "description": "PWA offline para transformar plano alimentar em marmitas planejadas com custos",
+  "homepage": "https://mncprime.github.io/nutriflow/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MncPrime/nutriflow.git"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test src/utils/*.test.mjs src/domain/*.test.js"
+    "test": "node --test src/utils/*.test.mjs src/domain/*.test.js",
+    "snapshot": "node scripts/snapshot.mjs",
+    "rollback": "node scripts/rollback.mjs"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",

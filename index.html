@@ -82,6 +82,18 @@ input[type=checkbox]{width:22px;height:22px;flex:none;padding:0}.mh label,.oh{di
 .plan-editor .row{margin-top:12px}
 .plan-editor-hint{margin:0 0 12px;color:var(--mut);font-size:14px}
 .capture-card{padding:14px}.capture-card h3{margin:0 0 4px;font-size:17px}.capture-card textarea{min-height:132px}.capture-actions{display:grid;grid-template-columns:1fr;gap:8px;margin-top:12px}.capture-actions button{width:100%}.capture-guide{margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}.capture-guide h4{margin:0 0 8px;font-size:15px}.capture-guide .row{gap:8px}.capture-preview{margin-top:12px;border-top:1px solid var(--line);padding-top:12px}.capture-preview h4{margin:0 0 8px;font-size:15px}.capture-preview ul,.capture-warnings{margin:8px 0;padding-left:20px}.capture-preview li,.capture-warnings li{margin:4px 0}.capture-warnings{color:var(--bad);font-size:13px}.capture-source{font-size:13px;color:var(--mut);margin:0 0 10px}.capture-preview-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.capture-preview-actions button{padding-inline:10px}
+.capture-input{margin-bottom:12px}
+.capture-label{display:block;font-size:14px;font-weight:600;color:var(--mut);margin-bottom:8px}
+.upload-pdf{display:block;position:relative;cursor:pointer}
+.upload-pdf input[type=file]{display:none}
+.upload-pdf .upload-button{display:flex;align-items:center;justify-content:center;padding:14px;border:2px dashed var(--line);border-radius:10px;background:color-mix(in srgb,var(--pri) 5%,var(--bg));color:var(--pri);text-align:center;font-weight:600;font-size:15px;transition:background-color .15s,border-color .15s;min-height:54px}
+.upload-pdf:hover .upload-button{background:color-mix(in srgb,var(--pri) 10%,var(--bg));border-color:var(--pri)}
+.upload-pdf:active .upload-button{transform:scale(.98)}
+.capture-loading{display:flex;align-items:center;justify-content:center;gap:8px;padding:16px;color:var(--mut);font-size:14px}
+.food-suggestions{display:flex;flex-direction:column;gap:4px;margin-top:8px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--bg)}
+.suggestion-item{display:block;width:100%;padding:10px;text-align:left;border:0;background:transparent;color:var(--ink);cursor:pointer;font-size:14px;transition:background-color .15s;min-height:40px}
+.suggestion-item:hover{background:color-mix(in srgb,var(--pri) 10%,var(--bg));color:var(--pri)}
+.suggestion-item:active{background:color-mix(in srgb,var(--pri) 20%,var(--bg))}
 .plan-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px}
 .plan-heading h2{font-size:22px;margin:0}
 .plan-count{flex:none;border:1px solid var(--line);border-radius:999px;padding:4px 9px;color:var(--mut);font-size:12px}
@@ -143,6 +155,9 @@ import {
   formatWhatsAppQuote,
 } from './src/domain/commercial.js';
 import { parsePlanText } from './src/domain/plan-parser.js';
+import { extractPdfText, isPdfJsAvailable, ensurePdfJsLoaded } from './src/utils/pdf-extractor.js';
+import { searchFoods, getMealSuggestions, formatFoodLine, validateQuantity } from './src/utils/meal-wizard.js';
+import { cleanExtractedText, convertCommonPatterns, isProbablyMealPlan } from './src/utils/smart-parser.js';
 import {
   getAdminSession,
   loadAdminData,
@@ -217,7 +232,7 @@ const cat=n=>(KW.find(k=>k[1].test(n))||['out'])[0];
 import { sanitizeFoodName } from './src/utils/food-matching.js';
 let S;try{S=JSON.parse(localStorage.getItem('nf2')||'null')}catch(e){}
 S=Object.assign({text:DEF,days:14,mode:'var',budget:0,tab:0,theme:'',off:{},moff:{},prices:{},priceOverrides:{},customerName:''},S||{});
-let tab=Number.isInteger(S.tab)&&S.tab>=0&&S.tab<=4?S.tab:0,P,catalogSnapshot=null,adminSession=null,adminData=null,adminFoodEdit=null,newFoodDraft=null,adminAuthMode='login',adminAuthMessage='',successMessage='',successTimer=0,planError='',screenError='',isSyncing=false,quoteHistory=[],adminPending=[],lastQuoteLink='',liveQuote=null,liveQuoteKey='',quoteRequestInFlight='',quoteErrorKey='',offlineSnapshot=null,offlineSnapshotKey='',offlineLookupKey='',adminRequests=[],captureText=S.text,capturePreview=null,captureFormOpen=false;
+let tab=Number.isInteger(S.tab)&&S.tab>=0&&S.tab<=4?S.tab:0,P,catalogSnapshot=null,adminSession=null,adminData=null,adminFoodEdit=null,newFoodDraft=null,adminAuthMode='login',adminAuthMessage='',successMessage='',successTimer=0,planError='',screenError='',isSyncing=false,quoteHistory=[],adminPending=[],lastQuoteLink='',liveQuote=null,liveQuoteKey='',quoteRequestInFlight='',quoteErrorKey='',offlineSnapshot=null,offlineSnapshotKey='',offlineLookupKey='',adminRequests=[],captureText=S.text,capturePreview=null,captureFormOpen=false,pdfLoading=false,pdfError='',foodSuggestions=[];
 const savingActions=new Set();
 S.tab=tab;
 function quoteKeyForState(state=S){return JSON.stringify({text:state.text,days:state.days,mode:state.mode,off:state.off,moff:state.moff})}
@@ -241,6 +256,9 @@ async function withSaving(button,message,action){
   finally{if(target){savingActions.delete(target);target.disabled=false;target.removeAttribute('aria-busy');target.classList.remove('is-saving');target.innerHTML=original}}
 }
 function successFeedback(){return successMessage?`<div class="feedback" role="status" aria-live="polite">${inlineIcon(checkCircleIcon)}<span>${esc(successMessage)}</span></div>`:''}
+function showSuccess(message){
+  screenError='';successMessage=message;clearTimeout(successTimer);view();successTimer=setTimeout(()=>{successMessage='';if(document.visibilityState==='visible')view()},4000);
+}
 const fmtMoney=(value,currency=catalogSnapshot?.config?.currency||'BRL')=>new Intl.NumberFormat('pt-BR',{style:'currency',currency}).format(value);
 const hasPrice=value=>value!==undefined&&value!==null&&value!==''&&Number.isFinite(Number(value));
 const inlineIcon=svg=>svg.replace('<svg ','<svg class="icon" ');
@@ -334,10 +352,21 @@ function view(){
     const draftMeals=(capturePreview?.meals||P).map(meal=>meal.name);
     const preview=capturePreview?`<section class="capture-preview" aria-live="polite"><h4>Prévia do plano</h4><p class="capture-source">${capturePreview.meals.length} refeição(ões) reconhecida(s). Revise antes de aplicar.</p>${capturePreview.meals.length?`<ul>${capturePreview.meals.map(meal=>`<li><b>${esc(meal.name)}</b>${meal.time?` · ${esc(meal.time)}`:''} — ${meal.opts.reduce((total,opt)=>total+opt.comps.length,0)} item(ns)</li>`).join('')}</ul>`:''}${capturePreview.warnings.length?`<ul class="capture-warnings">${capturePreview.warnings.map(warning=>`<li>${esc(warning)}</li>`).join('')}</ul>`:''}<div class="capture-preview-actions"><button class="s" type="button" onclick="discardCapturePreview()">Continuar editando</button><button class="p" type="button" onclick="applyCapturePreview()" ${capturePreview.meals.length?'':'disabled'}>Aplicar plano</button></div></section>`:'';
     m.innerHTML=`<div class="plan-heading"><h2>Plano alimentar</h2><span class="plan-count">${activeMeals} de ${P.length} refeições</span></div><p class="plan-description">Toque nos alimentos para incluir ou remover do ciclo. As opções riscadas ficam fora do planejamento.</p>
-    <section class="card capture-card"><h3>Adicionar ou importar plano</h3><p class="plan-editor-hint">Cole o plano como recebeu ou monte item por item. Nada é aplicado antes da sua confirmação.</p><textarea id="tx" aria-label="Plano em texto" placeholder="# Café da manhã | 07:00&#10;2 un ovo&#10;150 g mamão">${esc(captureText)}</textarea>
+    <section class="card capture-card"><h3>Adicionar ou importar plano</h3><p class="plan-editor-hint">Cole o plano, importe um PDF ou monte item por item. Nada é aplicado antes da sua confirmação.</p>
+    ${pdfError?`<p class="warn" role="alert">${esc(pdfError)}</p>`:''}
+    ${pdfLoading?`<div class="capture-loading"><svg class="saving-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" opacity=".25"/><path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Processando PDF…</span></div>`:''}
+    <div class="capture-input">
+      <label class="capture-label">Colar plano como texto</label>
+      <textarea id="tx" aria-label="Plano em texto" placeholder="# Café da manhã | 07:00&#10;2 un ovo&#10;150 g mamão">${esc(captureText)}</textarea>
+    </div>
+    <div class="capture-input" style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px">
+      <label class="capture-label">Ou importar PDF</label>
+      <label class="upload-pdf"><input type="file" accept=".pdf" onchange="onPdfFileSelect(this)" aria-label="Upload de PDF"/><span class="upload-button">📄 Selecionar arquivo PDF</span></label>
+      <p class="plan-editor-hint">Suportamos PDF com texto extraível (não imagens escaneadas). O texto será reconhecido automaticamente.</p>
+    </div>
     <div class="capture-actions"><button class="p" type="button" onclick="analyzeCapture()">Analisar plano</button><button class="s" type="button" onclick="toggleCaptureForm()">${captureFormOpen?'Fechar inclusão guiada':'Adicionar alimento guiado'}</button></div>
-    ${captureFormOpen?`<div class="capture-guide"><h4>Adicionar alimento</h4><div class="row"><label>Refeição<select id="capture-meal"><option value="new">Nova refeição</option>${draftMeals.map(name=>`<option value="${esc(name)}">${esc(name)}</option>`).join('')}</select></label><label>Nome da nova refeição<input id="capture-new-meal" placeholder="Ex.: Café da manhã"></label></div><label>Alimento<input id="capture-food" placeholder="Ex.: arroz integral cozido"></label><div class="row"><label>Quantidade<input id="capture-quantity" type="number" min="0.01" step="any" inputmode="decimal" placeholder="Ex.: 150"></label><label>Unidade<select id="capture-unit"><option value="g">gramas</option><option value="ml">mililitros</option><option value="un">unidades</option><option value="fatias">fatias</option></select></label></div><button class="s" type="button" onclick="appendCaptureFood()">Adicionar ao rascunho</button></div>`:''}
-    ${preview}<details class="plan-editor"><summary>Ajuda para texto colado</summary><p class="plan-editor-hint">Use # para uma refeição, ## para opções e “ou” entre alternativas. Entendemos g, gramas, kg, ml, litros, un, unidades e fatias. A extração de PDF será adicionada aqui no futuro; por enquanto, cole o texto extraído do documento.</p><button class="s" type="button" onclick="loadExampleCapture()">Usar exemplo</button></details></section>
+    ${captureFormOpen?`<div class="capture-guide"><h4>Adicionar alimento</h4><div class="row"><label>Refeição<select id="capture-meal"><option value="new">Nova refeição</option>${draftMeals.map(name=>`<option value="${esc(name)}">${esc(name)}</option>`).join('')}</select></label><label>Nome da nova refeição<input id="capture-new-meal" placeholder="Ex.: Café da manhã"></label></div><label>Alimento<input id="capture-food" placeholder="Ex.: arroz integral cozido" oninput="updateFoodSuggestions(this.value)"></label>${foodSuggestions.length?`<div class="food-suggestions">${foodSuggestions.map(f=>`<button type="button" class="suggestion-item" onclick="selectFoodSuggestion({label:'${esc(f.label)}'})">${esc(f.label)}</button>`).join('')}</div>`:''}<div class="row"><label>Quantidade<input id="capture-quantity" type="number" min="0.01" step="any" inputmode="decimal" placeholder="Ex.: 150"></label><label>Unidade<select id="capture-unit"><option value="g">gramas</option><option value="ml">mililitros</option><option value="un">unidades</option><option value="fatias">fatias</option></select></label></div><button class="s" type="button" onclick="appendCaptureFood()">Adicionar ao rascunho</button></div>`:''}
+    ${preview}<details class="plan-editor"><summary>Ajuda para texto colado</summary><p class="plan-editor-hint">Use # para uma refeição, ## para opções e "ou" entre alternativas. Entendemos g, gramas, kg, ml, litros, un, unidades e fatias. Padrões comuns como "Refeição: Nome | Hora" e "Opção 1:" também são reconhecidos.</p><button class="s" type="button" onclick="loadExampleCapture()">Usar exemplo</button></details></section>
     <div class="plan-meals">${P.map((x,mi)=>`<section class="card plan-meal"><div class="mh plan-meal-head"><label class="plan-meal-toggle"><input type="checkbox" ${S.moff[mi]?'':'checked'} onchange="tg('moff','${mi}')"> <span class="plan-meal-name">${esc(x.name)}</span></label><span class="plan-time">${esc(x.time)}</span></div>
     ${x.opts.map((o,oi)=>`${o.name?`<label class="oh"><input type="checkbox" ${S.off[mi+'.'+oi]?'':'checked'} onchange="tg('off','${mi}.${oi}')"> ${esc(o.name)}</label>`:''}
     ${o.comps.map((c,ci)=>`<div class="chips">${c.alts.map((a,ai)=>{const k=`${mi}.${oi}.${ci}.${ai}`,amount=a.g?formatQuantity(a.g,'g'):a.ml?formatQuantity(a.ml,'ml'):formatQuantity(a.n,'un');return `<button class="chip" aria-pressed="${!S.off[k]}" onclick="tg('off','${k}')">${esc(a.name)} · ${amount}</button>`}).join('')}</div>`).join('')}`).join('')}</section>`).join('')}</div>`;
@@ -392,6 +421,69 @@ function analyzeCapture(){
   captureText=$('#tx')?.value??captureText;
   try{capturePreview=parsePlanText(captureText,cat);planError='';view()}
   catch(error){capturePreview=null;planError=error instanceof Error?error.message:String(error);view()}
+}
+async function handlePdfUpload(file){
+  if(!file)return;
+  pdfLoading=true;
+  pdfError='';
+  view();
+  try{
+    // Carregar PDF.js se necessário
+    if(!isPdfJsAvailable()){
+      const loaded=await ensurePdfJsLoaded();
+      if(!loaded){
+        pdfError='Não consegui carregar o leitor de PDF. Tente colar o texto extraído manualmente.';
+        pdfLoading=false;
+        view();
+        return;
+      }
+    }
+    // Extrair texto do PDF
+    const result=await extractPdfText(file);
+    if(result.error){
+      pdfError=result.error;
+    }else if(result.text){
+      // Limpar e normalizar texto
+      const cleaned=cleanExtractedText(result.text);
+      const confidence=isProbablyMealPlan(cleaned);
+      
+      if(confidence<0.3){
+        pdfError='PDF não parece conter um plano alimentar. Verifique o arquivo.';
+      }else{
+        // Converter padrões comuns
+        const normalized=convertCommonPatterns(cleaned);
+        captureText=normalized;
+        planError='';
+        analyzeCapture();
+        showSuccess(`PDF importado com sucesso (${result.pages} página(s)). Revise a prévia abaixo.`);
+      }
+    }else{
+      pdfError='PDF não contém texto extraível. Tente colar manualmente.';
+    }
+  }catch(error){
+    pdfError=error instanceof Error?error.message:'Erro desconhecido ao processar PDF';
+    console.error('PDF Error:',error);
+  }finally{
+    pdfLoading=false;
+    view();
+  }
+}
+function onPdfFileSelect(input){
+  const file=input.files?.[0];
+  if(file)handlePdfUpload(file);
+}
+function updateFoodSuggestions(query){
+  if(!catalogSnapshot?.approved_foods||!query){
+    foodSuggestions=[];
+    return;
+  }
+  foodSuggestions=searchFoods(query,catalogSnapshot);
+}
+function selectFoodSuggestion(food){
+  if(!food)return;
+  $('#capture-food').value=food.label;
+  foodSuggestions=[];
+  view();
 }
 function discardCapturePreview(){capturePreview=null;view()}
 function applyCapturePreview(){
@@ -571,7 +663,7 @@ async function createAndShareQuote(button){
     if(adminSession)await refreshAdmin();
   });
 }
-Object.assign(window,{S,DEF,save,view,go,doParse,analyzeCapture,discardCapturePreview,applyCapturePreview,toggleCaptureForm,loadExampleCapture,appendCaptureFood,tg,setCustomerName,syncCatalog,openAdmin,adminLogin,adminSendPasswordReset,adminSaveRecoveryPassword,adminLogout,saveConfigFromForm,saveFoodFromForm,editAdminFood,cancelFoodEdit,setFoodStatus,deleteFood,saveAliasFromForm,deleteAlias,startPendingFood,startRemoteFoodRequest,createAndShareQuote});
+Object.assign(window,{S,DEF,save,view,go,doParse,analyzeCapture,discardCapturePreview,applyCapturePreview,toggleCaptureForm,loadExampleCapture,appendCaptureFood,tg,setCustomerName,syncCatalog,openAdmin,adminLogin,adminSendPasswordReset,adminSaveRecoveryPassword,adminLogout,saveConfigFromForm,saveFoodFromForm,editAdminFood,cancelFoodEdit,setFoodStatus,deleteFood,saveAliasFromForm,deleteAlias,startPendingFood,startRemoteFoodRequest,createAndShareQuote,handlePdfUpload,onPdfFileSelect,updateFoodSuggestions,selectFoodSuggestion,extractPdfText,isProbablyMealPlan,convertCommonPatterns,cleanExtractedText,searchFoods,showSuccess});
 $('#m').addEventListener('input',event=>{if(event.target.id==='cycle-budget')setBudget(event.target.value);if(event.target.id==='tx'){captureText=event.target.value;capturePreview=null}});
 $('#th').onclick=()=>{const d=document.documentElement,dark=d.dataset.theme==='dark'||(!d.dataset.theme&&matchMedia('(prefers-color-scheme:dark)').matches);d.dataset.theme=S.theme=dark?'light':'dark';save();view()};
 $('#sync').onclick=syncCatalog;

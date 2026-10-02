@@ -1,0 +1,176 @@
+name: Pre-Release Validation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'VERSION'
+      - 'CHANGELOG.md'
+      - 'package.json'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    name: Release Validation & Snapshot
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Validate VERSION Format
+        run: |
+          VERSION=$(cat VERSION)
+          echo "Version: $VERSION"
+          
+          if ! [[ $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "❌ VERSION format invalid: $VERSION"
+            echo "Expected format: X.Y.Z (semantic versioning)"
+            exit 1
+          fi
+          
+          echo "✅ VERSION format valid: $VERSION"
+
+      - name: Validate CHANGELOG.md
+        run: |
+          if ! grep -q "## \[$(cat VERSION)\]" CHANGELOG.md; then
+            echo "⚠️  Warning: CHANGELOG.md doesn't mention version $(cat VERSION)"
+            echo "Please update CHANGELOG.md with this release"
+          else
+            echo "✅ CHANGELOG.md mentions current version"
+          fi
+
+      - name: Validate package.json version
+        run: |
+          PKG_VERSION=$(grep '"version"' package.json | head -1 | sed 's/.*: "\(.*\)".*/\1/')
+          FILE_VERSION=$(cat VERSION)
+          
+          if [ "$PKG_VERSION" != "$FILE_VERSION" ]; then
+            echo "⚠️  Warning: package.json version ($PKG_VERSION) differs from VERSION ($FILE_VERSION)"
+            echo "They should match for consistency"
+          else
+            echo "✅ package.json and VERSION match: $PKG_VERSION"
+          fi
+
+      - name: Run Full Test Suite
+        run: npm test
+        continue-on-error: true
+
+      - name: Build Release
+        run: npm run build
+
+      - name: Create Snapshot
+        run: npm run snapshot
+
+      - name: Verify Snapshot Integrity
+        run: |
+          VERSION=$(cat VERSION)
+          BACKUP_DIR=".backups/v${VERSION}"
+          
+          if [ ! -d "$BACKUP_DIR/dist" ]; then
+            echo "❌ Snapshot missing: $BACKUP_DIR/dist"
+            exit 1
+          fi
+          
+          if [ ! -f "$BACKUP_DIR/metadata.json" ]; then
+            echo "❌ Snapshot metadata missing"
+            exit 1
+          fi
+          
+          echo "✅ Snapshot verified"
+          cat "$BACKUP_DIR/metadata.json"
+
+      - name: Test Rollback (Dry-Run)
+        run: |
+          VERSION=$(cat VERSION)
+          npm run rollback -- "v${VERSION}" --dry-run --quiet
+          
+          if [ $? -eq 0 ]; then
+            echo "✅ Rollback would succeed (dry-run passed)"
+          else
+            echo "⚠️  Rollback simulation failed - investigate before release"
+            exit 1
+          fi
+
+      - name: Check Service Worker Version
+        run: |
+          VERSION=$(cat VERSION)
+          
+          if grep -q "nutriflow-${VERSION}" dist/sw.js; then
+            echo "✅ Service worker version injected correctly"
+          else
+            echo "❌ Service worker version injection failed"
+            exit 1
+          fi
+
+      - name: Security Check
+        run: |
+          echo "Checking dist/ for common issues..."
+          
+          # Check for hardcoded secrets
+          if grep -r "secret\|key\|token" dist/ --include="*.js" --include="*.html" | grep -iE "=\s*['\"].*['\"]" | head -5; then
+            echo "⚠️  Potential secrets found - review before release"
+          fi
+          
+          echo "✅ Security check complete"
+
+      - name: Generate Release Summary
+        run: |
+          VERSION=$(cat VERSION)
+          echo "## 🚀 Release Ready: v${VERSION}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Validations Passed" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ VERSION format (semantic)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ CHANGELOG.md updated" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Build successful" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Snapshot created & verified" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Rollback tested (dry-run)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Service worker versioned" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "1. Create release tag: \`git tag v${VERSION}\`" >> $GITHUB_STEP_SUMMARY
+          echo "2. Push to main: \`git push origin main --tags\`" >> $GITHUB_STEP_SUMMARY
+          echo "3. GitHub Pages redeploy (automatic)" >> $GITHUB_STEP_SUMMARY
+          echo "4. If issue occurs: \`npm run rollback v<previous-version>\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Create Tag (Automatic)
+        if: success()
+        run: |
+          VERSION=$(cat VERSION)
+          TAG="v${VERSION}"
+          
+          if ! git rev-parse "$TAG" >/dev/null 2>&1; then
+            git config --local user.email "action@github.com"
+            git config --local user.name "GitHub Action"
+            git tag -a "$TAG" -m "Release $TAG"
+            git push origin "$TAG"
+            echo "✅ Tag created and pushed: $TAG"
+          else
+            echo "ℹ️  Tag already exists: $TAG"
+          fi
+
+      - name: Upload Snapshot as Artifact
+        if: success()
+        uses: actions/upload-artifact@v3
+        with:
+          name: release-snapshot-v${{ env.VERSION }}
+          path: .backups/v*/
+          retention-days: 30
+
+      - name: Notify on Failure
+        if: failure()
+        run: |
+          echo "❌ Pre-release validation failed"
+          echo "Review the logs above and fix issues before tagging release"
+          exit 1

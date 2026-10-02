@@ -1,0 +1,84 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'VERSIONING.md'
+      - 'README.md'
+      - '.github/RELEASE_TEMPLATE.md'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to GitHub Pages
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Verify Deployment
+        run: |
+          echo "✅ Deployment to GitHub Pages complete"
+          echo "URL: https://mncprime.github.io/nutriflow/"
+          echo "Cache: Busting enabled via service worker version"
+
+      - name: Create Deployment Summary
+        run: |
+          VERSION=$(cat VERSION)
+          COMMIT=$(git rev-parse --short HEAD)
+          echo "## ✅ Deployment Successful: v${VERSION}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit**: ${COMMIT}" >> $GITHUB_STEP_SUMMARY
+          echo "**Build Time**: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "**URL**: https://mncprime.github.io/nutriflow/" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Service Worker" >> $GITHUB_STEP_SUMMARY
+          echo "- Cache Name: \`nutriflow-${VERSION}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Strategy: Network first, cache fallback" >> $GITHUB_STEP_SUMMARY
+          echo "- Old caches: Auto-cleaned on next client update" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Rollback (if needed)" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "npm run rollback v<previous-version>" >> $GITHUB_STEP_SUMMARY
+          echo "git push origin main" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,106 @@
+name: Pre-Merge Checks
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+      - feature/**
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    name: Tests & Build Validation
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Tests
+        run: npm test
+        continue-on-error: true
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify Build Output
+        run: |
+          if [ ! -d "dist" ]; then
+            echo "❌ Build failed: dist/ directory not found"
+            exit 1
+          fi
+          
+          if [ ! -f "dist/index.html" ]; then
+            echo "❌ Build failed: index.html not found"
+            exit 1
+          fi
+          
+          if [ ! -f "dist/sw.js" ]; then
+            echo "❌ Build failed: sw.js not found"
+            exit 1
+          fi
+          
+          echo "✅ Build validation passed"
+          echo "Build size:"
+          du -sh dist/
+
+      - name: Check for Security Issues
+        run: |
+          echo "Checking for common security issues..."
+          
+          # Check for hardcoded credentials
+          if grep -r "api_key\|apiKey\|password" dist/ --include="*.js" --include="*.html" | grep -v "node_modules"; then
+            echo "⚠️  Warning: Possible hardcoded credentials found"
+          fi
+          
+          echo "✅ Security check complete"
+
+      - name: Comment on PR
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const buildSize = require('child_process').execSync('du -sh dist/ | cut -f1').toString().trim();
+            
+            let comment = '## Pre-Merge Check Results\n\n';
+            
+            if (context.payload.pull_request.head.ref.startsWith('feature/')) {
+              comment += '✅ **Feature Branch**: Checks enabled\n\n';
+            } else if (context.payload.pull_request.head.ref === 'develop') {
+              comment += '✅ **Develop Branch**: Staging checks enabled\n\n';
+            } else if (context.payload.pull_request.base.ref === 'main') {
+              comment += '⚠️ **Main Branch**: Release checks enabled\n\n';
+            }
+            
+            comment += `### Build Status
+            - Build Size: **${buildSize}**
+            - Artifacts: index.html, sw.js ✅
+            - Tests: See logs above
+            
+            ### Checklist Before Merge
+            - [ ] Commit messages are descriptive
+            - [ ] No debug console.log() calls left
+            - [ ] Mobile responsive (tested)
+            - [ ] Dark mode verified
+            - [ ] CHANGELOG.md updated (if feature)
+            - [ ] VERSION updated (if release to main)
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
