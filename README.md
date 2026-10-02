@@ -39,6 +39,12 @@ variáveis públicas do GitHub Pages.
    fila remota de validação de alimentos; ela não foi aplicada automaticamente.
 2. Mantenha a autorização admin baseada em `app_metadata.role = 'admin'`.
    RLS deve permanecer habilitada para todas as tabelas comerciais.
+   Para login e recuperação de senha, configure em **Authentication → URL
+   Configuration** o Site URL `https://mncprime.github.io/nutriflow/`. Contas
+   administrativas precisam existir em Authentication → Users e receber
+   `role: admin` em `app_metadata`; o app nunca concede essa função por conta
+   própria. Na tela Admin, **Esqueci minha senha** envia o link pelo fluxo de
+   recuperação do Supabase.
 3. Implante `supabase/functions/commercial-quote/`. A Edge Function usa
    `SUPABASE_SERVICE_ROLE_KEY` somente no runtime Supabase para ler preços e
    calcular a cotação. Essa chave nunca deve ser enviada ao navegador.

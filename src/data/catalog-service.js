@@ -129,6 +129,33 @@ export async function signInAdmin(email, password) {
   return data.user;
 }
 
+export async function requestAdminPasswordReset(email) {
+  if (!supabase) throw new Error('Supabase não configurado.');
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
+  if (error) throw new Error(`Falha ao solicitar redefinição de senha: ${error.message}`);
+}
+
+export async function updateAdminPassword(password) {
+  if (!supabase) throw new Error('Supabase não configurado.');
+  const { data, error } = await supabase.auth.updateUser({ password });
+  if (error) throw new Error(`Falha ao atualizar a senha: ${error.message}`);
+  if (data.user?.app_metadata?.role !== 'admin') {
+    await supabase.auth.signOut();
+    throw new Error('Esta conta não tem a função de administrador do NutriFlow.');
+  }
+  return data.user;
+}
+
+export function subscribeToAdminPasswordRecovery(callback) {
+  if (!supabase) return () => {};
+  const { data } = supabase.auth.onAuthStateChange((event, session) => {
+    if (event === 'PASSWORD_RECOVERY') {
+      callback(session?.user?.app_metadata?.role === 'admin');
+    }
+  });
+  return () => data.subscription.unsubscribe();
+}
+
 export async function getAdminSession() {
   if (!supabase) return null;
   const { data, error } = await supabase.auth.getSession();
