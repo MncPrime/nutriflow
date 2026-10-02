@@ -39,10 +39,9 @@ variáveis públicas do GitHub Pages.
    fila remota de validação de alimentos; ela não foi aplicada automaticamente.
 2. Mantenha a autorização admin baseada em `app_metadata.role = 'admin'`.
    RLS deve permanecer habilitada para todas as tabelas comerciais.
-3. Implante `supabase/functions/commercial-quote/`. A Edge Function usa a
-   variável secreta `SUPABASE_SERVICE_ROLE_KEY` somente no ambiente Supabase
-   para ler preços e calcular a cotação. Configure-a pelo painel/CLI de secrets
-   do Supabase, nunca no repositório ou no build do frontend.
+3. Implante `supabase/functions/commercial-quote/`. A Edge Function usa
+   `SUPABASE_SERVICE_ROLE_KEY` somente no runtime Supabase para ler preços e
+   calcular a cotação. Essa chave nunca deve ser enviada ao navegador.
 4. Configure `CORS_ALLOWED_ORIGINS` na função com a origem de produção e as
    origens locais necessárias, separadas por vírgula. O padrão inclui
    `https://mncprime.github.io`, `localhost:5173` e `127.0.0.1:5173`.
@@ -50,6 +49,12 @@ variáveis públicas do GitHub Pages.
    Preços e parâmetros financeiros são consultados pela função de orçamento.
    Offline, o app pode reutilizar snapshots agregados previamente salvos; um
    ciclo novo/alterado sem conexão permanece provisório até reconectar.
+
+Para publicar a Edge Function pelo GitHub Actions, adicione o secret de
+repositório `SUPABASE_ACCESS_TOKEN` e execute manualmente o workflow
+**Deploy commercial quote function**. O projeto fornece `SUPABASE_SERVICE_ROLE_KEY`
+à função no runtime; não cadastre essa chave no GitHub nem no frontend. O
+workflow fica disponível para execução após ser integrado à branch padrão.
 
 Na atualização, a migration do IndexedDB remove preços individuais de
 catálogos e cotações antigas. O service worker v10 também limpa o cache HTTP
