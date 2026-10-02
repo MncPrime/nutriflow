@@ -2,6 +2,8 @@ import Dexie from 'dexie';
 
 export const localDb = new Dexie('nutriflow-commercial-offline');
 
+localDb.on('blocked',()=>console.warn('Atualização do banco local bloqueada por outra aba aberta do NutriFlow.'));
+
 localDb.version(1).stores({
   catalogSnapshots: 'id, syncedAt',
   quotes: 'id, createdAt, status',

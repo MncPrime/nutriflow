@@ -217,7 +217,7 @@ const cat=n=>(KW.find(k=>k[1].test(n))||['out'])[0];
 import { sanitizeFoodName } from './src/utils/food-matching.js';
 let S;try{S=JSON.parse(localStorage.getItem('nf2')||'null')}catch(e){}
 S=Object.assign({text:DEF,days:14,mode:'var',budget:0,tab:0,theme:'',off:{},moff:{},prices:{},priceOverrides:{},customerName:''},S||{});
-let tab=Number.isInteger(S.tab)&&S.tab>=0&&S.tab<=4?S.tab:0,P,catalogSnapshot=null,adminSession=null,adminData=null,adminFoodEdit=null,newFoodDraft=null,adminAuthMode='login',adminAuthMessage='',successMessage='',successTimer=0,planError='',isSyncing=false,quoteHistory=[],adminPending=[],lastQuoteLink='',liveQuote=null,liveQuoteKey='',quoteRequestInFlight='',quoteErrorKey='',offlineSnapshot=null,offlineSnapshotKey='',offlineLookupKey='',adminRequests=[],captureText=S.text,capturePreview=null,captureFormOpen=false;
+let tab=Number.isInteger(S.tab)&&S.tab>=0&&S.tab<=4?S.tab:0,P,catalogSnapshot=null,adminSession=null,adminData=null,adminFoodEdit=null,newFoodDraft=null,adminAuthMode='login',adminAuthMessage='',successMessage='',successTimer=0,planError='',screenError='',isSyncing=false,quoteHistory=[],adminPending=[],lastQuoteLink='',liveQuote=null,liveQuoteKey='',quoteRequestInFlight='',quoteErrorKey='',offlineSnapshot=null,offlineSnapshotKey='',offlineLookupKey='',adminRequests=[],captureText=S.text,capturePreview=null,captureFormOpen=false;
 const savingActions=new Set();
 S.tab=tab;
 function quoteKeyForState(state=S){return JSON.stringify({text:state.text,days:state.days,mode:state.mode,off:state.off,moff:state.moff})}
@@ -421,14 +421,19 @@ function setBudget(value){
 async function syncCatalog(){
   if(isSyncing)return;
   isSyncing=true;screenError='';quoteErrorKey='';net();view();
+  let timer;
   try{
-    catalogSnapshot=await synchronizeCatalog();
-    liveQuote=null;liveQuoteKey='';quoteErrorKey='';
-    await flushLocalFoodRequests();
-    if(adminSession)await refreshAdmin();
+    const run=(async()=>{
+      catalogSnapshot=await synchronizeCatalog();
+      liveQuote=null;liveQuoteKey='';quoteErrorKey='';
+      await flushLocalFoodRequests();
+      if(adminSession)await refreshAdmin();
+    })();
+    run.catch(()=>{});
+    await Promise.race([run,new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('A sincronização demorou demais. Verifique a conexão e tente novamente.')),20000)})]);
   }
   catch(error){reportError(error)}
-  finally{isSyncing=false;net();view()}
+  finally{clearTimeout(timer);isSyncing=false;net();view()}
 }
 async function flushLocalFoodRequests(){
   const pending=await getPendingFoods();
