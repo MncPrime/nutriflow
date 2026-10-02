@@ -288,6 +288,7 @@ export function createQuoteSnapshot(quote, state, customerName = '') {
 }
 
 export function formatWhatsAppQuote(snapshot) {
+  const showCostBreakdown = snapshot.configSnapshot?.show_food_prices ?? false;
   const money = new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: snapshot.configSnapshot?.currency ?? 'BRL',
@@ -302,10 +303,12 @@ export function formatWhatsAppQuote(snapshot) {
       ...meal.selections.map(([selection, count]) => `  • ${count} dia(s): ${selection}`),
     ]),
     '',
-    `Custo dos alimentos: ${snapshot.pricingUnavailable ? 'indisponível sem conexão com o servidor' : snapshot.foodCost == null ? `provisório (${money.format(snapshot.knownFoodCost)} conhecido)` : money.format(snapshot.foodCost)}`,
-    `Custo de confecção: ${snapshot.configError ? 'a confirmar após sincronizar' : money.format(snapshot.productionCost)}`,
-    `Markup: ${snapshot.markupAmount == null ? 'sujeito à confirmação' : money.format(snapshot.markupAmount)}`,
-    `Taxa do app: ${snapshot.appFeeAmount == null ? 'sujeita à confirmação' : money.format(snapshot.appFeeAmount)}`,
+    ...(showCostBreakdown ? [
+      `Custo dos alimentos: ${snapshot.pricingUnavailable ? 'indisponível sem conexão com o servidor' : snapshot.foodCost == null ? `provisório (${money.format(snapshot.knownFoodCost)} conhecido)` : money.format(snapshot.foodCost)}`,
+      `Custo de confecção: ${snapshot.configError ? 'a confirmar após sincronizar' : money.format(snapshot.productionCost)}`,
+      `Markup: ${snapshot.markupAmount == null ? 'sujeito à confirmação' : money.format(snapshot.markupAmount)}`,
+      `Taxa do app: ${snapshot.appFeeAmount == null ? 'sujeita à confirmação' : money.format(snapshot.appFeeAmount)}`,
+    ] : []),
     `Total estimado: ${snapshot.finalPrice == null ? 'Provisório / sujeito à confirmação' : money.format(snapshot.finalPrice)}`,
     `Por marmita: ${snapshot.unitPrice == null ? 'sujeito à confirmação' : money.format(snapshot.unitPrice)}`,
     ...(snapshot.pendingFoods.length

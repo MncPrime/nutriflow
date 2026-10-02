@@ -35,19 +35,24 @@ const quote = {
   configSnapshot: { currency: 'BRL', show_food_prices: false, markup_percent: 30 },
 };
 
-test('public quote omits ingredient prices, costs, ids, and internal configuration by default', () => {
+test('public quote omits ingredient prices, cost breakdown, ids, and internal configuration by default', () => {
   const result = toPublicQuote(quote);
   const serialized = JSON.stringify(result);
 
   assert.equal(result.lines[0].unitPrice, undefined);
   assert.equal(result.lines[0].purchaseCost, undefined);
   assert.equal(result.lines[0].foodId, undefined);
-  assert.equal(result.foodCost, 0.32);
+  for (const field of ['foodCost', 'knownFoodCost', 'productionCost', 'markupAmount', 'appFeeAmount']) {
+    assert.equal(result[field], undefined);
+  }
+  assert.equal(result.finalPrice, 3.52);
+  assert.equal(result.unitPrice, 3.52);
   assert.equal(result.configSnapshot.markup_percent, undefined);
   assert.doesNotMatch(serialized, /private-food-id/);
+  assert.doesNotMatch(serialized, /0\.32|0\.2/);
 });
 
-test('public quote includes ingredient prices only when the admin enables them', () => {
+test('public quote includes ingredient prices and cost breakdown only when the admin enables them', () => {
   const result = toPublicQuote({
     ...quote,
     configSnapshot: { currency: 'BRL', show_food_prices: true },
@@ -55,4 +60,9 @@ test('public quote includes ingredient prices only when the admin enables them',
 
   assert.equal(result.lines[0].unitPrice, 8);
   assert.equal(result.lines[0].purchaseCost, 8);
+  assert.equal(result.foodCost, 0.32);
+  assert.equal(result.knownFoodCost, 0.32);
+  assert.equal(result.productionCost, 2);
+  assert.equal(result.markupAmount, 1);
+  assert.equal(result.appFeeAmount, 0.2);
 });
