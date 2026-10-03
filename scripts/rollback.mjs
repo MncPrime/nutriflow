@@ -3,11 +3,11 @@
 /**
  * rollback.mjs
  * 
- * Restaura versão anterior:
+ * Restaura um snapshot de build local:
  * - Lista versões disponíveis (--list)
  * - Restaura dist/ de um backup
  * - Faz commit automático com mensagem de rollback
- * - Prepara para git push (redeploy automático)
+ * - Não restaura código-fonte nem publica no GitHub Pages
  * 
  * Uso:
  *   npm run rollback --list           # Lista versões
@@ -151,7 +151,7 @@ if (!isDryRun) {
 if (!isDryRun && autoCommit) {
   try {
     execSync(`git add dist/ VERSION`, { cwd: projectRoot, stdio: 'inherit' });
-    const commitMsg = `rollback: restore ${targetVersion}\n\nRestored from backup snapshot.`;
+    const commitMsg = `fix(rollback): restaura ${targetVersion}\n\nRestored from backup snapshot.`;
     execSync(`git commit -m "${commitMsg}"`, { cwd: projectRoot, stdio: 'inherit' });
     log(`✅ Commit criado`);
   } catch (e) {

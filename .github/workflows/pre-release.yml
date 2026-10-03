@@ -23,7 +23,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: 22
           cache: 'npm'
 
       - name: Install Dependencies
@@ -65,7 +65,6 @@ jobs:
 
       - name: Run Full Test Suite
         run: npm test
-        continue-on-error: true
 
       - name: Build Release
         run: npm run build

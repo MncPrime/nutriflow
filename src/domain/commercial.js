@@ -1,5 +1,5 @@
 import { aggregateItems, calculatePurchase } from '../utils/pricing-engine.js';
-import { sanitizeFoodName } from '../utils/food-matching.js';
+import { foodKey as sanitizeFoodName } from '../utils/food-matching.js';
 
 export const DEFAULT_COOKING_FACTORS = {
   prot: 0.75, arroz: 2.5, feijao: 2.8, mac: 2.2, tub: 1, ovo: 1, supl: 1, out: 1,

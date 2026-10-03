@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { structurePlan, parseEntryText } from './plan-structurer.js';
 import { validateDraft } from './plan-validator.js';
 import { serializeDraft } from './plan-serializer.js';
-import { createSession, updateManualField, addEntries, previewQuick } from './import-session.js';
+import { MANUAL_OPTION_NEW, createSession, updateManualField, addEntries, previewQuick, validateManualForm, effectiveCategory, serializeManualDraft, restoreManualDraft, planSignature, suggestOptionName, syncManualOption } from './import-session.js';
 import { renderManual } from './review-view.js';
+import { buildDraft } from './import-session.js';
 import { classifyFood } from './food-classifier.js';
 import { parsePlanText } from '../domain/plan-parser.js';
 
@@ -100,7 +101,7 @@ test('rebuilds PDF table rows by position', () => {
 });
 
 import { isLikelyPlan } from './plan-detector.js';
-import { searchFoods } from './food-search.js';
+import { searchFoods, findSimilarFood } from './food-search.js';
 
 test('detects whether text looks like a meal plan', () => {
   assert.equal(isLikelyPlan('Contrato de prestação de serviços. Página 1.'), false);
@@ -109,8 +110,21 @@ test('detects whether text looks like a meal plan', () => {
 
 test('searches approved catalog foods by prefix or word', () => {
   const snapshot = { approved_foods: [{ id: 1, canonical_name: 'Frango grelhado' }, { id: 2, canonical_name: 'Peito de frango' }, { id: 3, canonical_name: 'Arroz' }] };
-  assert.deepEqual(searchFoods('fran', snapshot).map(f => f.id), [1]);
+  assert.deepEqual(searchFoods('fran', snapshot).map(f => f.id), [1, 2]);
   assert.deepEqual(searchFoods('frango', snapshot).map(f => f.id), [1, 2]);
+});
+
+test('search uses real snapshot shape with aliases, accents and typos', () => {
+  const snapshot = {
+    foods: [{ id: 1, canonical_name: 'Frango grelhado', approval_status: 'approved' }, { id: 2, canonical_name: 'Feijão carioca', approval_status: 'approved' }],
+    aliases: [{ food_id: 2, alias: 'Feijao preto' }],
+  };
+  assert.deepEqual(searchFoods('feijao', snapshot).map(f => f.id), [2]);
+  assert.equal(searchFoods('feijao preto', snapshot)[0].matchedAlias, 'Feijao preto');
+  assert.deepEqual(searchFoods('frnago grelhado', snapshot).map(f => f.id), [1]);
+  assert.equal(findSimilarFood('Frango grelhado', snapshot), null);
+  assert.equal(findSimilarFood('frango grelhdo', snapshot).label, 'Frango grelhado');
+  assert.equal(findSimilarFood('maçã', snapshot), null);
 });
 
 test('manual form state keeps meal name, quantity, and unit through independent updates', () => {
@@ -118,10 +132,11 @@ test('manual form state keeps meal name, quantity, and unit through independent 
   updateManualField(session, 'manualMealName', 'Café da manhã');
   updateManualField(session, 'manualQuantity', '150');
   updateManualField(session, 'manualUnit', 'g');
+  updateManualField(session, 'manualSubstitution', 'separate');
   updateManualField(session, 'manualQuantity', '180');
   assert.deepEqual(
-    [session.manualMealName, session.manualQuantity, session.manualUnit],
-    ['Café da manhã', '180', 'g'],
+    [session.manualMealName, session.manualQuantity, session.manualUnit, session.manualSubstitution],
+    ['Café da manhã', '180', 'g', 'separate'],
   );
   assert.throws(() => updateManualField(session, 'unknown', 'value'), TypeError);
 });
@@ -142,4 +157,177 @@ test('manual form renders entered values and adds an item to the named meal', ()
   const result = addEntries(session, '', session.manualMealName, previewQuick('30 g whey protein'));
   assert.equal(result.meal.name, 'Lanche da tarde');
   assert.equal(result.meal.opts[0].entries[0].alts[0].name, 'whey protein');
+});
+
+test('manual form mostra seletor de opção para refeição existente', () => {
+  const session = createSession();
+  session.draft = structurePlan('# Lanche\n## Opção 1\n100 g arroz');
+  session.manualMeal = session.draft.meals[0].id;
+  session.manualOption = session.draft.meals[0].opts[0].id;
+  const html = renderManual(session, value => String(value), session.draft.meals, []);
+  assert.match(html, /Opção da refeição/);
+  assert.match(html, /Criar nova opção/);
+});
+
+test('manual additions auto-group alternatives by category in the same meal', () => {
+  const session = createSession();
+  session.draft = structurePlan('# Almoço | 12:00');
+
+  addEntries(session, '', 'Almoço', previewQuick('100 g frango grelhado'));
+  const result = addEntries(session, '', 'Almoço', previewQuick('130 g patinho moído'));
+
+  const meal = result.meal;
+  assert.equal(meal.opts[0].entries.length, 1);
+  assert.equal(meal.opts[0].entries[0].alts.length, 2);
+  assert.deepEqual(
+    meal.opts[0].entries[0].alts.map(alt => alt.name),
+    ['frango grelhado', 'patinho moído'],
+  );
+});
+
+test('manual substitution mode can keep entries separate', () => {
+  const session = createSession();
+  session.draft = structurePlan('# Almoço | 12:00');
+
+  addEntries(session, '', 'Almoço', previewQuick('100 g frango grelhado'));
+  const result = addEntries(session, '', 'Almoço', previewQuick('130 g patinho moído'), undefined, 'separate');
+
+  assert.equal(result.groupedCount, 0);
+  assert.equal(result.separateCount, 1);
+  assert.equal(result.meal.opts[0].entries.length, 2);
+});
+
+function formState(over = {}) {
+  const s = createSession();
+  Object.assign(s, { mode: 'manual', manualMeal: 'new', manualMealName: 'Almoço', ...over });
+  s.quickPreview = s.quick ? previewQuick(`${s.manualQuantity} g ${s.quick}`) : null;
+  return s;
+}
+
+test('formulário manual valida mínimos e categoria obrigatória', () => {
+  assert.equal(validateManualForm(formState()).ok, false);
+  const short = validateManualForm(formState({ quick: 'ab', manualQuantity: '100', manualMealName: 'Al' }));
+  assert.ok(short.errors.food && short.errors.meal);
+  const unknown = formState({ quick: 'xyzzy', manualQuantity: '100' });
+  assert.ok(validateManualForm(unknown).errors.category);
+  assert.equal(validateManualForm({ ...unknown, guidedCategory: 'other' }).ok, true);
+  assert.equal(validateManualForm(formState({ quick: 'frango', manualQuantity: '100' })).ok, true);
+});
+
+test('categoria é sugerida ao digitar e o usuário pode trocar', () => {
+  const s = formState({ quick: 'frango grelhado', manualQuantity: '100' });
+  assert.deepEqual(effectiveCategory(s), { category: 'protein', suggested: true });
+  s.guidedCategory = 'fat';
+  assert.deepEqual(effectiveCategory(s), { category: 'fat', suggested: false });
+  assert.ok(!renderManual(s, x => x, [], []).includes('(opcional)'));
+});
+
+test('rascunho do formulário é salvo e restaurado', () => {
+  const s = formState({ quick: 'arroz', manualQuantity: '100' });
+  s.draft = structurePlan('# Lanche\n## Opção 1\n100 g arroz');
+  s.manualMeal = s.draft.meals[0].id;
+  s.manualOption = s.draft.meals[0].opts[0].id;
+  const raw = serializeManualDraft(s);
+  assert.ok(raw);
+  const r = createSession();
+  r.draft = structurePlan('# Lanche\n## Opção 1\n100 g arroz');
+  assert.equal(restoreManualDraft(r, raw), true);
+  assert.equal(r.quick, 'arroz');
+  assert.equal(restoreManualDraft(createSession(), '{bad'), false);
+  assert.equal(serializeManualDraft(createSession()), null);
+});
+
+test('inclusão manual direta preserva índices existentes e agrupa por categoria', () => {
+  const plan = '# Almoço | 12:00\n150 g arroz\n130 g frango\n# Jantar\n100 g feijão';
+  const cat = () => ({});
+  const base = parsePlanText(plan, cat).meals;
+  const session = createSession();
+  session.draft = buildDraft(plan, {}).draft;
+  const meal = session.draft.meals[0];
+  const entries = previewQuick('130 g patinho');
+  entries.forEach(entry => entry.alts.forEach(alt => { alt.category = 'protein'; alt.categoryLocked = true; }));
+  const result = addEntries(session, meal.id, '', entries, {}, 'auto');
+  assert.equal(result.groupedCount, 1);
+  const next = parsePlanText(serializeDraft(session.draft).text, cat).meals;
+  assert.equal(planSignature(base).length > 0, true);
+  assert.deepEqual(next[0].opts[0].comps.map(c => c.alts.length), [1, 2]);
+  assert.deepEqual(next.slice(1).map(m => m.opts[0].comps.length), base.slice(1).map(m => m.opts[0].comps.length));
+});
+
+test('inclusão manual escolhe opção existente da refeição', () => {
+  const session = createSession();
+  session.draft = structurePlan('# Lanche\n## Opção 1\n100 g arroz\n## Opção 2\n100 g banana');
+  const meal = session.draft.meals[0];
+  const optionTwo = meal.opts[1];
+  const result = addEntries(
+    session,
+    meal.id,
+    '',
+    previewQuick('80 g granola'),
+    {},
+    'separate',
+    { optionId: optionTwo.id, optionName: '' },
+  );
+  assert.equal(result.option.id, optionTwo.id);
+  assert.equal(meal.opts[0].entries.length, 1);
+  assert.equal(meal.opts[1].entries.length, 2);
+});
+
+test('inclusão manual cria nova opção com nome sugerido', () => {
+  const session = createSession();
+  session.draft = structurePlan('# Lanche\n## Opção 1\n100 g arroz');
+  const meal = session.draft.meals[0];
+  const autoName = suggestOptionName(meal);
+  const result = addEntries(
+    session,
+    meal.id,
+    '',
+    previewQuick('120 g mamão'),
+    {},
+    'separate',
+    { optionId: MANUAL_OPTION_NEW, optionName: autoName },
+  );
+  assert.equal(result.option.name, 'Opção 2');
+  assert.equal(meal.opts.length, 2);
+  assert.equal(meal.opts[1].entries.length, 1);
+});
+
+test('agrupamento automático respeita apenas a opção selecionada', () => {
+  const session = createSession();
+  session.draft = structurePlan('# Almoço\n## Opção 1\n100 g frango\n## Opção 2\n130 g patinho');
+  const meal = session.draft.meals[0];
+  const optionTwo = meal.opts[1];
+  const result = addEntries(
+    session,
+    meal.id,
+    '',
+    previewQuick('140 g peixe'),
+    {},
+    'auto',
+    { optionId: optionTwo.id, optionName: '' },
+  );
+  assert.equal(result.groupedCount, 1);
+  assert.equal(meal.opts[0].entries[0].alts.length, 1);
+  assert.equal(meal.opts[1].entries.length, 1);
+  assert.equal(meal.opts[1].entries[0].alts.length, 2);
+});
+
+test('opção nova exige nome válido na validação do formulário', () => {
+  const session = formState({ quick: 'frango', manualQuantity: '100' });
+  session.draft = structurePlan('# Lanche\n## Opção 1\n100 g arroz');
+  session.manualMeal = session.draft.meals[0].id;
+  session.manualOption = MANUAL_OPTION_NEW;
+  session.manualOptionName = 'AB';
+  assert.ok(validateManualForm(session).errors.option);
+  session.manualOptionName = 'Opção 2';
+  assert.equal(validateManualForm(session).errors.option, undefined);
+});
+
+test('syncManualOption mantém opção válida para a refeição selecionada', () => {
+  const session = createSession();
+  session.draft = structurePlan('# Lanche\n## Opção 1\n100 g arroz');
+  session.manualMeal = session.draft.meals[0].id;
+  session.manualOption = '';
+  syncManualOption(session);
+  assert.equal(session.manualOption, session.draft.meals[0].opts[0].id);
 });

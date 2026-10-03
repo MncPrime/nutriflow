@@ -108,6 +108,7 @@ input[type=checkbox]{width:22px;height:22px;flex:none;padding:0}.mh label,.oh{di
 .food-suggestions{display:flex;flex-direction:column;gap:4px;margin-top:8px;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--bg)}
 .suggestion-item{display:block;width:100%;padding:10px;text-align:left;border:0;background:transparent;color:var(--ink);cursor:pointer;font-size:14px;transition:background-color .15s;min-height:40px}
 .suggestion-item:hover{background:color-mix(in srgb,var(--pri) 10%,var(--bg));color:var(--pri)}
+.imp-dup{display:flex;flex-direction:column;gap:8px;margin:10px 0;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink)}.imp-dup button{min-height:44px}.suggestion-item small{display:block;color:var(--mut)}
 .suggestion-item:active{background:color-mix(in srgb,var(--pri) 20%,var(--bg))}
 .manual-intro{margin:0 0 14px;color:var(--mut);font-size:14px}
 .manual-section{display:grid;gap:8px;margin:0 0 12px;padding:14px;border:1px solid var(--line);border-radius:14px;background:color-mix(in srgb,var(--pri) 3%,var(--card))}
@@ -118,9 +119,15 @@ input[type=checkbox]{width:22px;height:22px;flex:none;padding:0}.mh label,.oh{di
 .manual-selected b{color:var(--ink)}
 .manual-quantity{display:grid;gap:6px}
 .manual-quantity-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(104px,.55fr);gap:8px}
-.manual-category{margin-top:2px}
-.manual-category summary{margin:0;font-size:13px;font-weight:650}
-.manual-category .imp-cats{padding:8px 0 0;border:0}
+.req{color:var(--bad,var(--mut))}
+.manual-error{display:block;color:var(--bad,var(--mut));font-size:12px;margin-top:4px}
+.manual-missing{margin-top:8px}
+.manual-added{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;margin-bottom:12px;border:1px solid var(--ok);border-radius:14px;background:color-mix(in srgb,var(--ok) 8%,var(--card));font-size:14px}
+.manual-added button{min-height:44px;min-width:44px}
+.manual-draft{display:flex;flex-direction:column;gap:8px;padding:12px;margin-bottom:12px;border:1px solid var(--line);border-radius:14px;background:var(--card)}
+.manual-draft div{display:flex;gap:8px}.manual-draft button{min-height:44px;flex:1}
+input[aria-invalid=true]{border-color:var(--bad,currentColor)}
+button[aria-disabled=true]{opacity:.55}
 .manual-section .imp-cats .chip{background:var(--bg)}
 .imp-understood{margin:12px 0;padding:12px;border:1px solid color-mix(in srgb,var(--pri) 24%,var(--line));border-radius:12px;background:color-mix(in srgb,var(--pri) 6%,var(--card));font-size:13px}
 .imp-understood>b{display:block;margin-bottom:6px;color:var(--pri)}
@@ -189,9 +196,9 @@ import {
 } from './src/domain/commercial.js';
 import { parsePlanText } from './src/domain/plan-parser.js';
 import { extractPdfLines, preloadPdfEngine } from './src/importer/document-extractor.js';
-import { createSession, buildDraft, refresh, updateAlt, removeAlt, updateMeal, removeMeal, previewQuick, addEntries, updateManualField, serializeDraft } from './src/importer/import-session.js';
+import { MANUAL_OPTION_NEW, createSession, buildDraft, refresh, updateAlt, removeAlt, updateMeal, removeMeal, previewQuick, addEntries, updateManualField, serializeDraft, validateManualForm, effectiveCategory, serializeManualDraft, restoreManualDraft, planSignature, suggestOptionName, syncManualOption } from './src/importer/import-session.js';
 import { renderChooser, renderReview, renderManual, renderScheduleChooser } from './src/importer/review-view.js';
-import { searchFoods } from './src/importer/food-search.js';
+import { searchFoods, findSimilarFood } from './src/importer/food-search.js';
 import { isLikelyPlan } from './src/importer/plan-detector.js';
 import {
   getAdminSession,
@@ -264,7 +271,7 @@ const DEF=`# Café da manhã | 06:00
 110g cenoura ou beterraba ou vagem ou brócolis ou couve-flor ou chuchu ou abobrinha ou tomate ou pepino`;
 const KW=[['ovo',/\bovos?\b/i],['supl',/whey|leite em p/i],['arroz',/arroz/i],['feijao',/feij[aã]o|lentilha/i],['mac',/macarr|massa|espaguete/i],['tub',/batata|ab[oó]bora|aipim|mandioca|inhame|cabotia/i],['prot',/frango|carne|patinho|peixe|til[aá]pia|bife|merluza|salm[aã]o|ac[eé]m/i]];
 const cat=n=>(KW.find(k=>k[1].test(n))||['out'])[0];
-import { sanitizeFoodName, matchFoodName } from './src/utils/food-matching.js';
+import { foodKey as sanitizeFoodName, matchFoodName, findDuplicateFood } from './src/utils/food-matching.js';
 let S;try{S=JSON.parse(localStorage.getItem('nf2')||'null')}catch(e){}
 S=Object.assign({text:DEF,days:14,mode:'var',budget:0,tab:0,theme:'',off:{},moff:{},prices:{},priceOverrides:{},customerName:''},S||{});
 let tab=Number.isInteger(S.tab)&&S.tab>=0&&S.tab<=4?S.tab:0,P,catalogSnapshot=null,adminSession=null,adminData=null,adminFoodEdit=null,newFoodDraft=null,adminAuthMode='login',adminAuthMessage='',successMessage='',successTimer=0,planError='',screenError='',isSyncing=false,quoteHistory=[],adminPending=[],lastQuoteLink='',liveQuote=null,liveQuoteKey='',quoteRequestInFlight='',quoteErrorKey='',offlineSnapshot=null,offlineSnapshotKey='',offlineLookupKey='',adminRequests=[],captureText=S.text,imp=createSession(),foodSuggestions=[];
@@ -354,7 +361,7 @@ function renderAdmin(){
   return `<div class="plan-heading"><h2>Área administrativa</h2><button class="s" onclick="adminLogout()">Sair</button></div>
     <section class="card"><h3>Alimentos aguardando validação (${validationCount})</h3>
     ${pendingCatalogFoods.length?`<h4>Catálogo pendente</h4>${pendingCatalogFoods.map(food=>`<div class="admin-food"><div><b>${esc(food.canonical_name)}</b><small>${esc(food.category)} · ${esc(food.base_unit)} · ${hasPrice(food.price_per_purchase_unit)?`${fmtMoney(Number(food.price_per_purchase_unit))}/${esc(food.purchase_unit_label)}`:'Preço não informado'}</small></div><div class="admin-actions"><button class="s" onclick="editAdminFood('${esc(food.id)}')">${hasPrice(food.price_per_purchase_unit)?'Editar':'Informar preço'}</button>${hasPrice(food.price_per_purchase_unit)?`<button class="s" onclick="setFoodStatus('${esc(food.id)}','approved',this)">Aprovar</button>`:''}<button class="s" onclick="setFoodStatus('${esc(food.id)}','rejected',this)">Rejeitar</button></div></div>`).join('')}`:''}
-    ${adminRequests.length?`<h4>Solicitações recebidas dos clientes</h4>${adminRequests.map(request=>`<div class="admin-food"><div><b>${esc(request.food_name)}</b><small>${formatQuantity(request.requested_quantity,request.base_unit)} · ${new Date(request.created_at).toLocaleString('pt-BR')}</small></div><button class="s" data-request-id="${esc(request.id)}" onclick="startRemoteFoodRequest(this.dataset.requestId)">${request.resolved_food_id?'Revisar cadastro':'Cadastrar alimento'}</button></div>`).join('')}`:''}
+    ${adminRequests.length?`<h4>Solicitações recebidas dos clientes</h4>${adminRequests.map(request=>{const dup=request.resolved_food_id?null:findDuplicateFood(request.food_name,foods,aliases);return `<div class="admin-food"><div><b>${esc(request.food_name)}</b><small>${formatQuantity(request.requested_quantity,request.base_unit)} · ${new Date(request.created_at).toLocaleString('pt-BR')}</small>${dup?`<small class="warn" role="status">${dup.kind==='exact'?'Já existe':'Parece com'}: <b>${esc(dup.food.canonical_name)}</b>${dup.matched!==dup.food.canonical_name?` (sinônimo “${esc(dup.matched)}”)`:''}</small>`:''}</div><div class="admin-actions">${dup?`<button class="p" data-request-id="${esc(request.id)}" data-food-id="${esc(dup.food.id)}" onclick="linkRequestAsAlias(this.dataset.requestId,this.dataset.foodId,this)">Vincular como sinônimo</button>`:''}<button class="s" data-request-id="${esc(request.id)}" onclick="startRemoteFoodRequest(this.dataset.requestId)">${request.resolved_food_id?'Revisar cadastro':dup?'Cadastrar como novo':'Cadastrar alimento'}</button></div></div>`}).join('')}`:''}
     ${adminPending.length?`<h4>Pendentes neste dispositivo</h4>${adminPending.map(food=>`<div class="admin-food"><div><b>${esc(food.name)}</b><small>${esc(food.category)} · ${formatQuantity(food.rawAmount,food.baseUnit)} · ${new Date(food.createdAt).toLocaleString('pt-BR')}</small></div><button class="s" data-pending-name="${esc(food.normalizedName)}" onclick="startPendingFood(this.dataset.pendingName)">${food.foodId?'Revisar catálogo':'Cadastrar alimento'}</button></div>`).join('')}`:''}
     ${validationCount===0?'<p class="net">Nenhum alimento aguardando validação.</p>':''}</section>
     <form class="card admin-form" onsubmit="event.preventDefault();saveConfigFromForm(this.querySelector('button[type=submit]'))"><h3>Configurações comerciais</h3>
@@ -374,7 +381,20 @@ function renderAdmin(){
     <section class="card"><h3>Sinônimos</h3><form class="admin-form" onsubmit="event.preventDefault();saveAliasFromForm(this.querySelector('button[type=submit]'))"><label>Alimento principal<select id="alias-food">${foods.map(food=>`<option value="${esc(food.id)}">${esc(food.canonical_name)}</option>`).join('')}</select></label><label>Nome alternativo<input id="alias-name" required></label><button class="p" type="submit">Adicionar sinônimo</button></form>${aliases.map(alias=>`<div class="admin-food"><div>${esc(alias.alias)}<small>${esc(foods.find(food=>food.id===alias.food_id)?.canonical_name||'Alimento')}</small></div><button class="s" onclick="deleteAlias('${esc(alias.id)}')">Remover</button></div>`).join('')}</section>
     <section class="card"><h3>Orçamentos recentes neste dispositivo</h3>${quoteHistory.slice(0,5).map(quote=>`<div class="admin-food"><div>${esc(quote.customerName||'Sem nome')}<small>${new Date(quote.createdAt).toLocaleString('pt-BR')} · ${quote.finalPrice==null?'provisório':fmtMoney(quote.finalPrice)}</small></div></div>`).join('')||'<p class="net">Nenhum orçamento salvo.</p>'}</section>`;
 }
+const DRAFT_KEY='nf2-draft';
+function persistImpDraft(){
+  if(imp.pendingDraft)return;
+  try{const raw=serializeManualDraft(imp);raw?localStorage.setItem(DRAFT_KEY,raw):localStorage.removeItem(DRAFT_KEY)}catch(e){}
+}
+function readImpDraft(){try{return localStorage.getItem(DRAFT_KEY)}catch(e){return null}}
+function importDraftResume(){
+  const raw=readImpDraft();imp.pendingDraft=false;
+  if(raw&&restoreManualDraft(imp,raw)){imp.quickPreview=null;importQuick();return}
+  view();
+}
+function importDraftDiscard(){imp.pendingDraft=false;try{localStorage.removeItem(DRAFT_KEY)}catch(e){}view()}
 function view(){
+  persistImpDraft();
   const navIcons=[planIcon,calendarIcon,mealsIcon,shoppingIcon,squaresIcon];
   $('#nav').innerHTML=['Plano','Ciclo','Marmitas','Compras','Admin'].map((t,i)=>`<button aria-current="${tab===i}" onclick="go(${i})">${inlineIcon(navIcons[i])}<span>${t}</span></button>`).join('');
   const d=document.documentElement;
@@ -432,12 +452,12 @@ function view(){
   ensureOnlineQuote();
 }
 function go(i){tab=Math.min(4,Math.max(0,Number(i)||0));screenError='';save();view();$('#m').scrollTop=0}
-const impOptions=()=>({isKnownFood:catalogSnapshot?.approved_foods?.length?name=>matchFoodName(name,catalogSnapshot.approved_foods.map(f=>({name:f.canonical_name}))).status==='matched':undefined});
+const impOptions=()=>({isKnownFood:(catalogSnapshot?.foods||catalogSnapshot?.approved_foods)?.length?name=>matchFoodName(name,(catalogSnapshot.foods||catalogSnapshot.approved_foods).map(f=>({name:f.canonical_name,aliases:(catalogSnapshot.aliases||[]).filter(a=>a.food_id===f.id).map(a=>a.alias)}))).status==='matched':undefined});
 function renderImportCard(){
   imp.text=captureText;
   if(imp.mode==='pdf-schedule')return renderScheduleChooser(imp,esc);
   if(imp.draft&&imp.mode!=='manual')return renderReview(imp,esc);
-  if(imp.mode==='manual')return (imp.draft?renderManual(imp,esc,imp.draft.meals,foodSuggestions):'')+(imp.draft?.meals.length?`<hr style="border:0;border-top:1px solid var(--line);margin:14px 0">${renderReview(imp,esc)}`:'');
+  if(imp.mode==='manual')return imp.draft?renderManual(imp,esc,imp.draft.meals,foodSuggestions):''
   return renderChooser(imp,esc);
 }
 function doParse(t){captureText=t??$('#tx')?.value??captureText;importInterpret()}
@@ -482,20 +502,35 @@ function importChooseSchedule(index){
 function importPick(mode){
   imp.error='';foodSuggestions=[];
   if(mode==='text'){imp.mode='';imp.draft=null;view();setTimeout(()=>$('#tx')?.focus(),0);return}
-  if(mode==='manual'){imp.mode='manual';imp.manualMeal='new';imp.manualMealName='';imp.manualQuantity='';imp.manualUnit='g';imp.quick='';imp.quickPreview=null;imp.guidedCategory='';imp.draft=buildDraft(S.text,impOptions()).draft;refresh(imp,impOptions());view();return}
+  if(mode==='manual'){imp.mode='manual';imp.manualMeal='new';imp.manualMealName='';imp.manualOption='';imp.manualOptionName='';imp.manualQuantity='';imp.manualUnit='g';imp.manualSubstitution='auto';imp.quick='';imp.quickPreview=null;imp.guidedCategory='';imp.manualTouched=false;imp.lastAdded=null;imp.pendingDraft=Boolean(readImpDraft());imp.draft=buildDraft(S.text,impOptions()).draft;refresh(imp,impOptions());view();return}
 }
-function importBack(){imp.mode='';imp.draft=null;imp.stats=null;imp.error='';imp.pdfSchedules=[];imp.pdfPages=0;imp.quickPreview=null;imp.manualMeal='new';imp.manualMealName='';imp.manualQuantity='';imp.manualUnit='g';foodSuggestions=[];view()}
+function importBack(){imp.lastAdded=null;imp.pendingDraft=false;imp.manualTouched=false;imp.guidedCategory='';imp.mode='';imp.draft=null;imp.stats=null;imp.error='';imp.pdfSchedules=[];imp.pdfPages=0;imp.quickPreview=null;imp.manualMeal='new';imp.manualMealName='';imp.manualOption='';imp.manualOptionName='';imp.manualQuantity='';imp.manualUnit='g';imp.manualSubstitution='auto';foodSuggestions=[];view()}
 function importEdit(id,field,value){updateAlt(imp,id,field,value,impOptions());view()}
 function importRemove(id){removeAlt(imp,id,impOptions());view()}
 function importMeal(id,field,value){updateMeal(imp,id,field,value)}
 function importRemoveMeal(id){removeMeal(imp,id,impOptions());view()}
-function importMealSelect(value){imp.manualMeal=value;view()}
+function importMealSelect(value){
+  imp.manualMeal=value;
+  if(value==='new'){imp.manualOption='';imp.manualOptionName='';view();return}
+  syncManualOption(imp);
+  view();
+}
 function importMealName(value){updateManualField(imp,'manualMealName',value)}
-function importCategory(category){imp.guidedCategory=imp.guidedCategory===category?'':category;view()}
-function importCategoryOpen(open){imp.manualCategoryOpen=Boolean(open)}
+function importOptionSelect(value){
+  imp.manualOption=value;
+  if(value===MANUAL_OPTION_NEW){
+    const meal=imp.draft?.meals?.find(item=>item.id===imp.manualMeal);
+    if(!String(imp.manualOptionName||'').trim()&&meal)imp.manualOptionName=suggestOptionName(meal);
+  }
+  view();
+}
+function importOptionName(value){updateManualField(imp,'manualOptionName',value)}
+function importSubstitution(value){updateManualField(imp,'manualSubstitution',value);view()}
+function importCategory(category){imp.guidedCategory=category;view()}
 function importQuick(value){
-  if(typeof value==='string'){imp.quick=value;foodSuggestions=value.trim().length>=2&&!/\d/.test(value)&&catalogSnapshot?.approved_foods?searchFoods(value,catalogSnapshot):[]}
+  if(typeof value==='string'){imp.quick=value;foodSuggestions=value.trim().length>=2&&!/\d/.test(value)&&(catalogSnapshot?.foods||catalogSnapshot?.approved_foods)?searchFoods(value,catalogSnapshot):[];imp.dupWarn=null}
   updateManualField(imp,'manualMealName',$('#imp-new-meal')?.value??imp.manualMealName??'');
+  updateManualField(imp,'manualOptionName',$('#imp-option-name')?.value??imp.manualOptionName??'');
   updateManualField(imp,'manualQuantity',$('#imp-qty')?.value??imp.manualQuantity??'');
   updateManualField(imp,'manualUnit',$('#imp-unit')?.value??imp.manualUnit??'g');
   const qty=imp.manualQuantity.trim(),unit=imp.manualUnit,food=imp.quick.trim();
@@ -507,15 +542,63 @@ function importQuick(value){
   const el=keep.id&&document.getElementById(keep.id);
   if(el){el.focus();try{el.setSelectionRange(keep.start,keep.start)}catch{}}
 }
-function importPickFood(label){imp.quick=label;foodSuggestions=[];importQuick()}
+function importPickFood(label){imp.quick=label;foodSuggestions=[];imp.dupWarn=null;importQuick()}
+function importDupUse(i){
+  const w=imp.dupWarn?.[i];if(!w)return;
+  const re=new RegExp(w.typed.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i');
+  imp.quick=re.test(imp.quick)?imp.quick.replace(re,w.label):w.label;
+  imp.dupWarn=null;foodSuggestions=[];importQuick();
+}
+function importDupKeep(){
+  (imp.dupKeep=imp.dupKeep||[]).push(...(imp.dupWarn||[]).map(w=>w.typed.toLowerCase()));
+  imp.dupWarn=null;importAddManual();
+}
+function manualSnapshot(){return {text:S.text,off:JSON.stringify(S.off||{}),moff:JSON.stringify(S.moff||{})}}
+function applyManualDraft(resetToggles){
+  const {text}=serializeDraft(imp.draft);
+  const {meals}=parsePlanText(text,cat);
+  if(!text||!meals.length)return false;
+  P=meals;S.text=text;captureText=text;
+  if(resetToggles){S.off={};S.moff={}}
+  save();return true;
+}
+function reloadManualDraft(mealName){
+  imp.draft=buildDraft(S.text,impOptions()).draft;refresh(imp,impOptions());
+  imp.manualMeal=imp.draft.meals.find(meal=>meal.name===mealName)?.id||'new';
+  syncManualOption(imp);
+}
 function importAddManual(){
+  imp.manualTouched=true;
   const entries=previewQuick(imp.quickText||'');
-  if(!entries.length||!entries.every(entry=>entry.alts.every(alt=>alt.valid)))return;
-  if(imp.guidedCategory)entries.forEach(entry=>entry.alts.forEach(alt=>{alt.category=imp.guidedCategory;alt.categoryLocked=true}));
-  const result=addEntries(imp,imp.manualMeal==='new'?'':imp.manualMeal,imp.manualMealName,entries,impOptions());
+  const category=effectiveCategory(imp).category;
+  if(!validateManualForm(imp).ok||!category||!entries.length||!entries.every(entry=>entry.alts.every(alt=>alt.valid))){view();return}
+  const kept=imp.dupKeep||[];
+  const similar=entries.flatMap(entry=>entry.alts).filter(alt=>!kept.includes(String(alt.name).toLowerCase())).map(alt=>({typed:alt.name,hit:findSimilarFood(alt.name,catalogSnapshot)})).filter(x=>x.hit).map(x=>({typed:x.typed,label:x.hit.label}));
+  if(similar.length){imp.dupWarn=similar;view();return}
+  imp.dupKeep=[];
+  entries.forEach(entry=>entry.alts.forEach(alt=>{alt.category=category;alt.categoryLocked=true}));
+  const before=manualSnapshot();
+  const keepToggles=planSignature(parsePlanText(serializeDraft(imp.draft).text,cat).meals)===planSignature(parsePlanText(S.text,cat).meals);
+  const optionSelection={optionId:imp.manualOption||'',optionName:imp.manualOptionName};
+  const result=addEntries(imp,imp.manualMeal==='new'?'':imp.manualMeal,imp.manualMealName,entries,impOptions(),imp.manualSubstitution,optionSelection);
   if(result.error){imp.error=result.error;view();return}
-  imp.manualMeal=result.meal.id;imp.manualMealName='';imp.manualQuantity='';imp.manualUnit='g';imp.quick='';imp.quickPreview=null;imp.quickText='';imp.error='';foodSuggestions=[];
-  showSuccess('Item adicionado ao rascunho. Confirme para aplicar ao plano.');view();
+  const mealName=result.meal.name;
+  const optionName=result.option?.name||'Sem opção';
+  if(!applyManualDraft(!keepToggles)){reloadManualDraft(mealName);imp.error='Não foi possível adicionar. Revise o alimento e a quantidade.';view();return}
+  imp.manualMeal=result.meal.id;imp.manualMealName='';imp.manualOption=result.option?.id||'';imp.manualOptionName='';imp.manualQuantity='';imp.manualUnit='g';imp.manualSubstitution='auto';imp.quick='';imp.quickPreview=null;imp.quickText='';imp.error='';imp.guidedCategory='';imp.manualTouched=false;foodSuggestions=[];
+  const grouped=result.groupedCount||0,separated=result.separateCount||0;
+  const detail=[grouped?`${grouped} como substituição`:'',separated?`${separated} separado(s)`:''].filter(Boolean).join(' e ');
+  imp.lastAdded={message:`Adicionado a ${mealName} · ${optionName}${detail?` (${detail})`:''}.`,mealName,snapshot:before};
+  if(result.forceFallbackCount)imp.error='Não encontrei grupo da mesma categoria; apliquei como substituição no último item da refeição.';
+  view();
+}
+function importUndo(){
+  const undo=imp.lastAdded;if(!undo)return;
+  S.text=undo.snapshot.text;
+  try{S.off=JSON.parse(undo.snapshot.off);S.moff=JSON.parse(undo.snapshot.moff)}catch(e){S.off={};S.moff={}}
+  P=parsePlanText(S.text,cat).meals;captureText=S.text;
+  reloadManualDraft(undo.mealName);imp.lastAdded=null;imp.error='';
+  save();view();
 }
 function importConfirm(){
   if(!imp.draft)return;
@@ -611,6 +694,9 @@ function foodFormValues(status=$('#food-status').value){
 async function saveFoodFromForm(button){
   const food=foodFormValues();
   if(food.approval_status==='approved'&&!hasPrice(food.price_per_purchase_unit)){reportError(new Error('Informe um preço válido antes de aprovar o alimento.'));return}
+  const dup=findDuplicateFood(food.canonical_name,adminData?.foods||[],adminData?.aliases||[],{excludeId:adminFoodEdit||undefined});
+  if(dup?.kind==='exact'){reportError(new Error(`Já existe “${dup.matched}” no catálogo (${dup.food.canonical_name}). Use o item existente ou cadastre um sinônimo.`));return}
+  if(dup&&!confirm(`Parece duplicado de “${dup.food.canonical_name}”. Cadastrar mesmo assim?`))return;
   return withSaving(button,adminFoodEdit?'Alimento atualizado.':'Alimento cadastrado.',async()=>{
     const pendingName=newFoodDraft?.normalizedName;
     const requestId=newFoodDraft?.requestId;
@@ -638,7 +724,23 @@ async function deleteFood(id){
   try{await deleteAdminFood(id);await refreshAdmin();catalogSnapshot=await synchronizeCatalog();liveQuote=null;liveQuoteKey='';adminFoodEdit=null;screenError='';view()}
   catch(error){reportError(error)}
 }
+function linkRequestAsAlias(requestId,foodId,button){
+  const request=adminRequests.find(item=>item.id===requestId);
+  if(!request)return;
+  const clash=findDuplicateFood(request.food_name,adminData.foods,adminData.aliases,{threshold:2});
+  return withSaving(button,'Solicitação vinculada como sinônimo.',async()=>{
+    const food=adminData.foods.find(item=>item.id===foodId);
+    if(!food)throw new Error('Alimento de destino não encontrado.');
+    const exactAlias=clash&&clash.kind==='exact';
+    if(!exactAlias)await saveAdminAlias({foodId,alias:request.food_name});
+    await resolveFoodValidationRequest(requestId,'approved',foodId);
+    await refreshAdmin();catalogSnapshot=await synchronizeCatalog();liveQuote=null;liveQuoteKey='';
+  });
+}
 async function saveAliasFromForm(button){
+  const aliasName=$('#alias-name').value;
+  const clash=findDuplicateFood(aliasName,adminData?.foods||[],adminData?.aliases||[],{threshold:2});
+  if(clash){reportError(new Error(`“${aliasName.trim()}” já existe no catálogo como “${clash.matched}”.`));return}
   return withSaving(button,'Sinônimo adicionado.',async()=>{await saveAdminAlias({foodId:$('#alias-food').value,alias:$('#alias-name').value});await refreshAdmin();catalogSnapshot=await synchronizeCatalog();liveQuote=null;liveQuoteKey=''});
 }
 async function deleteAlias(id){
@@ -688,7 +790,7 @@ async function createAndShareQuote(button){
     if(adminSession)await refreshAdmin();
   });
 }
-Object.assign(window,{S,DEF,save,view,go,doParse,analyzeCapture,loadExampleCapture,tg,setCustomerName,syncCatalog,openAdmin,adminLogin,adminSendPasswordReset,adminSaveRecoveryPassword,adminLogout,saveConfigFromForm,saveFoodFromForm,editAdminFood,cancelFoodEdit,setFoodStatus,deleteFood,saveAliasFromForm,deleteAlias,startPendingFood,startRemoteFoodRequest,createAndShareQuote,showSuccess,importInterpret,importPdf,importChooseSchedule,importPick,importBack,importEdit,importRemove,importMeal,importRemoveMeal,importMealSelect,importMealName,importCategory,importCategoryOpen,importQuick,importPickFood,importAddManual,importConfirm});
+Object.assign(window,{linkRequestAsAlias,S,DEF,save,view,go,doParse,analyzeCapture,loadExampleCapture,tg,setCustomerName,syncCatalog,openAdmin,adminLogin,adminSendPasswordReset,adminSaveRecoveryPassword,adminLogout,saveConfigFromForm,saveFoodFromForm,editAdminFood,cancelFoodEdit,setFoodStatus,deleteFood,saveAliasFromForm,deleteAlias,startPendingFood,startRemoteFoodRequest,createAndShareQuote,showSuccess,importInterpret,importPdf,importChooseSchedule,importPick,importBack,importEdit,importRemove,importMeal,importRemoveMeal,importMealSelect,importMealName,importOptionSelect,importOptionName,importCategory,importDraftResume,importDraftDiscard,importQuick,importPickFood,importDupUse,importDupKeep,importAddManual,importConfirm,importUndo});
 $('#m').addEventListener('input',event=>{if(event.target.id==='cycle-budget')setBudget(event.target.value);if(event.target.id==='tx')captureText=event.target.value});
 $('#th').onclick=()=>{const d=document.documentElement,dark=d.dataset.theme==='dark'||(!d.dataset.theme&&matchMedia('(prefers-color-scheme:dark)').matches);d.dataset.theme=S.theme=dark?'light':'dark';save();view()};
 $('#sync').onclick=syncCatalog;
