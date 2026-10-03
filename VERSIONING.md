@@ -2,7 +2,9 @@
 
 ## Visão Geral
 
-Sistema de versionamento semântico com Git Flow e rollback automático para regredir mudanças em produção de forma segura e rápida.
+Versionamento semântico para releases, com branches de trabalho integradas por
+PR em `main`. O deploy do site é separado da prévia local e ocorre somente após
+mudanças chegarem à branch de produção.
 
 ---
 
@@ -20,73 +22,67 @@ Exemplo: `1.1.0` = v1 (inicial), v1.1 (meal insertion), v1.1.0 (patch 0)
 
 ---
 
-## 🌳 Git Flow
+## 🌳 Branches, commits e publicação
 
 ```
-main (produção, tags v*.*.*)
-  ↑ (merge com --no-ff)
-develop (staging, build diário)
-  ↑ (merge com --no-ff)
-feature/* (branches de feature)
-hotfix/* (branches de correção crítica direto de main)
+main (produção)
+  ↑ PR revisado e validado
+feat/*, fix/*, docs/*, chore/* (trabalho e mudanças paralelas)
 ```
 
-### Regra de Merge
+Crie uma branch por mudança a partir de `main`. Não faça commits diretamente em
+`main`; branches de trabalho não têm deploy. Use nomes curtos como
+`feat/importador-pdf` e `fix/cache-offline`.
 
-```bash
-# Feature → develop
-git checkout develop
-git merge --no-ff feature/pdf-extraction
-git push origin develop
+Use mensagens no formato `tipo(escopo): resumo`, por exemplo:
 
-# develop → main (release)
-git checkout main
-git merge --no-ff develop
-git tag v1.1.0
-git push origin main --tags
+```text
+feat(importador): reconhece rotinas do PDF
+fix(sw): atualiza cache da aplicação
+docs(fluxo): explica como confirmar publicação
 ```
+
+Envie a branch e abra um PR com destino `main`. Use título no formato
+`tipo(escopo): resumo` e **Squash and merge** para manter uma mensagem clara por
+mudança no histórico de `main`. Após os checks e a revisão, integre o PR em
+`main`; esse push inicia a publicação do site. Não há branch `develop` nem site
+de staging neste fluxo.
 
 ---
 
 ## 💾 Sistema de Snapshots
 
-Cada build automático cria um **backup** com:
+O snapshot é criado pelo workflow de validação de release quando os arquivos de
+versão são atualizados em `main`. Ele contém:
 - `dist/` (código compilado)
 - `metadata.json` (versão, commit, timestamp, test results)
 - Armazenado em `.backups/v1.0.0/`, `.backups/v1.1.0/`, etc.
 
-### Automatização
+### Criação manual para inspeção local
 
 ```bash
-# Após cada build bem-sucedido:
 npm run build
 npm run snapshot  # Cria .backups/v1.1.0/dist/ + metadata
 ```
 
 ---
 
-## 🔙 Rollback (Restauração Rápida)
+## 🔙 Snapshots e reversão de produção
 
-Se algo quebrar em produção:
+`npm run rollback` restaura um snapshot local em `dist/` e atualiza `VERSION`;
+ele não restaura o código-fonte. Como o GitHub Pages recompila o código-fonte,
+esse comando sozinho não reverte uma publicação.
 
 ```bash
-# 1. Listar versões disponíveis
+# Listar snapshots locais disponíveis
 npm run rollback --list
 
-# 2. Restaurar versão anterior
+# Restaurar um artefato local para inspeção
 npm run rollback v1.0.0
-
-# 3. Verificar mudanças (git diff)
-git status
-
-# 4. Fazer commit e push
-git commit -m "rollback: restore v1.0.0"
-git push origin main
-
-# 5. GitHub Pages redeploy (~1 min)
 ```
 
-**Tempo total**: ~2-3 minutos vs. ~30 min para debug + fix + test + deploy
+Para reverter código em produção, reverta o código-fonte em uma branch `fix/...`,
+valide e abra um PR para `main`. O merge aciona o deploy normal.
 
 ---
 
@@ -112,29 +108,18 @@ Mantém histórico de todas as versões:
 
 ## 🔐 CI/CD Safeguards
 
-### Pre-Merge (develop ← feature)
-- ✅ Rodar testes (`npm test`)
-- ✅ Build sem erros (`npm run build`)
-- ✅ Verificar linting
+### Workflows do GitHub Actions
 
-### Pre-Release (main ← develop)
-- ✅ Todos testes passando
-- ✅ CHANGELOG atualizado
-- ✅ VERSION atualizado
-- ✅ Snapshot validado
-- ✅ Rollback testado
-
-### Workflow Automático
-Duas GitHub Actions:
-
-1. **pre-merge.yml**: Roda on pull_request
-   - Testa, linta, constrói PR
-   - Comenta resultado no PR
-   
-2. **pre-release.yml**: Roda on push to main
-   - Valida integridade
-   - Cria snapshot
-   - Dispara deploy automático
+- `pre-merge.yml` (`Pull Request Checks`): roda `npm test` e `npm run build`
+  para PRs destinados a `main`. Configure `Tests & Build` como check obrigatório.
+- `pages.yml` (`Deploy GitHub Pages`): publica somente em push para `main` e
+  registra SHA, versão e URL em `Commit publicado` no resumo da execução.
+- Configure a proteção de `main` no GitHub para exigir PR e o check
+  `Tests & Build` (Settings → Rules → Rulesets). O workflow não substitui a
+  regra de proteção.
+- Para identificar a página aberta, compare os 7 caracteres da meta
+  `document.querySelector('meta[name="build-commit"]')?.content` com o início
+  do SHA no resumo do deploy. Uma prévia local mostra `local`.
 
 ---
 
@@ -157,9 +142,9 @@ nutriflow/
 │   ├── snapshot.mjs            # Cria backup após build
 │   └── rollback.mjs            # Restaura versão anterior
 ├── .github/workflows/
-│   ├── pre-merge.yml           # Testes em PR
-│   ├── pre-release.yml         # Validação antes de deploy
-│   └── deploy.yml              # Deploy automático
+│   ├── pre-merge.yml           # Testes e build em PR para main
+│   ├── pre-release.yml         # Validações/snapshot de versão
+│   └── pages.yml               # Deploy somente a partir de main
 └── .github/
     └── RELEASE_TEMPLATE.md     # Template para releases
 ```
@@ -168,67 +153,41 @@ nutriflow/
 
 ## 🚀 Exemplo de Fluxo Completo
 
-### 1. Desenvolver Feature
+### 1. Desenvolver uma mudança
 
 ```bash
-git checkout develop
-git checkout -b feature/dark-mode-fix
-# ... código, commits ...
-git push origin feature/dark-mode-fix
+git switch main
+git pull origin main
+git switch -c feat/dark-mode-fix
+# ... código e commits ...
+git push -u origin feat/dark-mode-fix
 ```
 
 ### 2. Criar Pull Request
 
-- PR: `develop` ← `feature/dark-mode-fix`
-- GitHub Action `pre-merge.yml` roda testes
-- Revisor aprova
-- Merge com `--no-ff`
+Abra um PR de `feat/dark-mode-fix` para `main`. Aguarde `Pull Request Checks`
+passar e faça merge pelo GitHub.
 
-### 3. Release em Staging
+### 3. Confirmar publicação
 
 ```bash
-git checkout develop
-git pull origin develop
-# Verificar builds e testes
-git push origin develop  # Staging build automático
+# Verifique a execução Deploy GitHub Pages em Actions.
+# O resumo informa o SHA publicado; compare-o com a meta build-commit no site.
 ```
 
-### 4. Release em Produção
-
-```bash
-git checkout main
-git merge --no-ff develop
-npm run build
-npm run snapshot  # Cria backup (v1.1.1)
-git tag v1.1.1
-git push origin main --tags
-# GitHub Action dispara deploy
-```
-
-### 5. Se Algo Quebrar
-
-```bash
-npm run rollback v1.1.0
-# Restaura dist/ e git commit
-git push origin main
-# Redeploy automático em ~1 min
-```
+Não use `npm run dev` como confirmação de publicação: ele serve somente uma
+prévia local.
 
 ---
 
-## 🔍 Verificação de Rollback
-
-Testar regularmente (quinzenal):
+## 🔍 Inspeção de snapshots
 
 ```bash
-# 1. Simular rollback
+# Listar snapshots disponíveis
+npm run rollback --list
+
+# Simular restauração local sem alterar arquivos
 npm run rollback v1.0.0 --dry-run
-
-# 2. Verificar integridade
-cat dist/index.html | wc -l  # Comparar com backup original
-
-# 3. Restaurar versão atual
-npm run rollback v1.1.0
 ```
 
 ---
@@ -242,14 +201,16 @@ npm run rollback v1.1.0
 → Verificar `.backups/` ou criar a partir de git tags
 
 ### "Service worker still serving old version"
-→ VERSION constante em `public/sw.js` deve mudar a cada build
+→ Confirme o SHA publicado no Actions e compare com a meta `build-commit` da
+página. Atualize ou remova o service worker e recarregue online, sem limpar os
+dados do site, para preservar o plano salvo localmente.
 
 ---
 
 ## 📚 Referências
 
 - [Semantic Versioning](https://semver.org/) - Guia oficial
-- [Git Flow](https://nvie.com/posts/a-successful-git-branching-model/) - Modelo de branching
+- [Fluxo de contribuição](./WORKFLOW_GUIDE.md) - Branches, PRs e deploy
 - [Changelog Convention](https://keepachangelog.com/) - Formato de CHANGELOG
 
 ---

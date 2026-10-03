@@ -31,10 +31,10 @@ Before creating this release, verify all items below:
 - [ ] Previous version snapshot available (fallback)
 
 ### Git & Versioning
-- [ ] Feature branch merged to `develop` with `--no-ff`
-- [ ] Develop branch merged to `main` with `--no-ff`
-- [ ] Commit message format: "release: bump version to X.Y.Z"
-- [ ] Tag will be auto-created: `git tag vX.Y.Z`
+- [ ] Release changes are in a branch created from the current `main`
+- [ ] Pull request targets `main`; `Pull Request Checks` passed
+- [ ] Commit messages use `tipo(escopo): resumo`
+- [ ] No direct push to `main`
 
 ### Production Safety
 - [ ] Service worker version updated (injected at build time)
@@ -70,32 +70,21 @@ Before creating this release, verify all items below:
 
 ## Rollback Instructions
 
-If this release causes issues in production:
-
-```bash
-# 1. Restore previous version
-npm run rollback vX.Y.(Z-1)
-
-# 2. Verify backup was applied
-git log -1
-git diff HEAD~1 dist/
-
-# 3. Push to redeploy
-git push origin main
-
-# 4. GitHub Pages redeploy (automatic, ~1 min)
-```
+If this release causes issues in production, revert the source changes in a
+`fix/...` branch, validate them, and open a PR to `main`. The `npm run rollback`
+script only restores a local `dist/` snapshot; it does not restore source code
+used by the Pages build.
 
 ---
 
 ## Deployment
 
 ### GitHub Pages Auto-Deployment
-- [ ] Trigger: GitHub Action on push to main with tag
+- [ ] Trigger: `Deploy GitHub Pages` on push to `main`
 - [ ] Build: `npm run build` → dist/
-- [ ] Deploy: dist/ pushed to gh-pages branch
-- [ ] CDN: Propagates in ~30 seconds
-- [ ] Verification: Check https://mncprime.github.io/nutriflow/
+- [ ] Deploy: GitHub Pages deployment environment
+- [ ] Verification: deployment succeeded and its summary shows the expected SHA
+- [ ] Browser meta `build-commit` matches the deployed SHA
 
 ### Cache Invalidation
 - Service worker cache name: `nutriflow-X.Y.Z`
@@ -112,11 +101,11 @@ git push origin main
 - [ ] Check browser console for errors
 - [ ] Monitor GitHub Issues for user reports
 
-### Rollback Decision
+### Recovery Decision
 If issues arise within 1 hour of release:
 1. Check severity (can be worked around? or breaks core feature?)
-2. If critical: Execute rollback immediately
-3. If minor: Create hotfix branch, merge to main as vX.Y.(Z+1)
+2. If critical: revert source changes through a `fix/...` PR to `main`
+3. If minor: create a `fix/...` branch and open a PR to `main`
 
 ---
 

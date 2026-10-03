@@ -3,7 +3,6 @@ name: Deploy GitHub Pages
 on:
   push:
     branches: [main]
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -48,3 +47,16 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Publish deployment details
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          {
+            echo "## NutriFlow published"
+            echo ""
+            echo "- Branch: \`${GITHUB_REF_NAME}\`"
+            echo "- Commit publicado: \`${GITHUB_SHA}\`"
+            echo "- Versão: \`$(cat VERSION)\`"
+            echo "- Site: ${PAGE_URL}"
+          } >> "$GITHUB_STEP_SUMMARY"

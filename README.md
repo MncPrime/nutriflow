@@ -11,9 +11,49 @@ npm run dev
 O Tailwind CSS é processado pelo Vite a partir de `src/style.css`. Para gerar a
 versão de produção em `dist/`, execute `npm run build`.
 
-O deploy do GitHub Pages é feito pela GitHub Action em `.github/workflows/pages.yml`.
-Nas configurações do repositório, selecione **Settings → Pages → Build and deployment
-→ Source: GitHub Actions**.
+## Fluxo de mudanças e publicação
+
+- `npm run dev` abre uma prévia local em `http://127.0.0.1:5173`; ela pode conter
+  mudanças ainda não publicadas.
+- Crie uma branch por mudança a partir de `main`, por exemplo
+  `feat/importador-pdf`, `fix/cache-offline`, `docs/fluxo-publicacao` ou
+  `chore/ci-workflows`. Mudanças paralelas usam branches separadas; não trabalhe
+  diretamente em `main`.
+- Use mensagens no formato `tipo(escopo): resumo`, com tipos como `feat`, `fix`,
+  `docs`, `test`, `refactor` e `chore`. Exemplos:
+  `feat(importador): reconhece rotinas do PDF` e
+  `fix(sw): atualiza cache da aplicação`.
+- Envie a branch e abra um PR para `main`. O workflow de PR executa `npm test` e
+  `npm run build`; ambos precisam passar antes do merge.
+- Dê ao PR um título no mesmo formato de commit e use **Squash and merge** para
+  manter o histórico de `main` com uma mensagem clara por mudança.
+- O site real, `https://mncprime.github.io/nutriflow/`, só é publicado pelo
+  workflow de Pages após um push em `main` (normalmente, o merge do PR). Branches
+  e PRs não publicam o site. Configure uma regra de proteção para `main` exigir
+  PR e o job **Tests & Build** do workflow **Pull Request Checks**. Em
+  **Settings → Rules → Rulesets**, crie uma regra para `main` com PR obrigatório
+  e esse check como status obrigatório.
+
+Consulte [WORKFLOW_GUIDE.md](./WORKFLOW_GUIDE.md) para o fluxo completo e
+[VERSIONING.md](./VERSIONING.md) para releases, snapshots e rollback.
+
+Para confirmar qual versão chegou ao site, abra **Actions → Deploy GitHub Pages**,
+confira a execução concluída mais recente e o SHA exibido em **Commit publicado**.
+No console do navegador, compare
+`document.querySelector('meta[name="build-commit"]')?.content` com os primeiros
+7 caracteres do SHA publicado. O valor `local` identifica uma prévia local,
+não um deploy.
+
+Se o navegador ainda mostrar a versão anterior, confirme primeiro que a execução
+de Pages terminou com sucesso e compare os SHAs. Atualize a página; no app
+instalado, feche-o completamente e abra-o novamente enquanto estiver online.
+Se necessário, atualize ou remova o service worker nas ferramentas do navegador
+e recarregue o site online. **Não limpe os dados do site**, pois isso pode apagar
+o plano alimentar salvo localmente.
+
+O deploy do GitHub Pages é feito pela GitHub Action em
+`.github/workflows/pages.yml`. Nas configurações do repositório, selecione
+**Settings → Pages → Build and deployment → Source: GitHub Actions**.
 
 ## Catálogo comercial e orçamento
 

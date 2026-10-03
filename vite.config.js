@@ -26,10 +26,13 @@ function injectVersionPlugin() {
     },
     transformIndexHtml(html) {
       const version = getVersion();
-      // Injeta version como meta tag para acesso em JS
+      const fullCommit = process.env.GITHUB_SHA;
+      const commit = fullCommit && /^[\da-f]{7,64}$/i.test(fullCommit)
+        ? fullCommit.slice(0, 7)
+        : 'local';
       return html.replace(
         '</head>',
-        `  <meta name="version" content="${version}">\n</head>`
+        `  <meta name="version" content="${version}">\n  <meta name="build-commit" content="${commit}">\n</head>`
       );
     },
     resolveId(id) {

@@ -91,24 +91,23 @@ Nenhuma. Versão 1.0.0 totalmente compatível (off/moff zerados ao reparar).
 
 ## Guia de Versioning
 
-Ver [VERSIONING.md](/VERSIONING.md) para detalhes completos sobre:
+Ver [VERSIONING.md](./VERSIONING.md) para detalhes completos sobre:
 - Semantic versioning strategy
-- Git Flow branching
+- Branches de trabalho e PRs para `main`
 - Snapshot/Rollback process
-- CI/CD safeguards
+- CI/CD e identificação do SHA publicado
 
 ---
 
 ## Como Contribuir
 
-1. Sempre criar branch de feature: `feature/sua-feature`
-2. Fazer commits pequenos e descritivos
-3. Ao completar, criar PR para `develop`
-4. CI/CD testa automaticamente
-5. Após aprovação, fazer merge com `--no-ff`
-6. Release para main (tags v*.*.*)
+1. Crie uma branch `feat/`, `fix/`, `docs/` ou `chore/` a partir de `main`
+2. Use commits no formato `tipo(escopo): resumo`
+3. Abra PR para `main` e aguarde `Pull Request Checks`
+4. Após revisão e aprovação, faça merge do PR
+5. Confirme o deploy em Actions comparando o SHA publicado com o do navegador
 
-Veja [VERSIONING.md](/VERSIONING.md#git-flow) para detalhes.
+Veja [WORKFLOW_GUIDE.md](./WORKFLOW_GUIDE.md) para os passos e exemplos.
 
 ---
 
